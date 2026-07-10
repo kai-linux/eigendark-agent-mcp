@@ -17,7 +17,7 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 
 SERVER_NAME = "eigendark-agent-mcp"
-SERVER_VERSION = "0.1.0"
+SERVER_VERSION = "0.2.0"
 PROTOCOL_VERSION = "2025-11-25"
 DEFAULT_BASE_URL = "https://www.eigendark.com"
 DEFAULT_TIMEOUT_SECONDS = 20
@@ -84,8 +84,12 @@ def _base_url_or_error() -> str:
     return base_url
 
 
+SENSITIVE_RUNTIME_VALUES: list = []
+
+
 def _sensitive_values(extra: Optional[Sequence[Any]] = None) -> list:
-    values = [configured_seat_token()]
+    values = [configured_seat_token(), _env("EIGENDARK_API_KEY"), _env("ED_API_KEY")]
+    values.extend(SENSITIVE_RUNTIME_VALUES)
     if extra:
         values.extend(extra)
     return [str(value) for value in values if isinstance(value, str) and value]
@@ -156,6 +160,7 @@ def _json_request(
     *,
     body: Optional[Mapping[str, Any]] = None,
     query: Optional[Mapping[str, Any]] = None,
+    bearer: Optional[str] = None,
 ) -> Any:
     base_url = _base_url_or_error()
     url = f"{base_url}{path}"
@@ -166,6 +171,8 @@ def _json_request(
         "Accept": "application/json",
         "User-Agent": f"{SERVER_NAME}/{SERVER_VERSION}",
     }
+    if bearer:
+        headers["Authorization"] = f"Bearer {bearer}"
     data = None
     if body is not None:
         data = json.dumps(body).encode("utf-8")
@@ -278,7 +285,171 @@ def tool_summarize_state(args: Mapping[str, Any]) -> Any:
     }
 
 
+# ---------------------------------------------------------------------------
+# Self-onboarding + match creation + replay sharing
+# ---------------------------------------------------------------------------
+
+# A sandbox key minted at runtime is remembered for the process lifetime so
+# an agent can onboard once and then create matches without re-passing it.
+_RUNTIME_API_KEY: Optional[str] = None
+
+
+def configured_api_key() -> Optional[str]:
+    return _env("EIGENDARK_API_KEY") or _env("ED_API_KEY") or _RUNTIME_API_KEY
+
+
+def solve_pow(challenge_id: str, difficulty: int, max_iterations: int = 5_000_000) -> str:
+    """Find a nonce such that sha256("<id>:<nonce>") starts with `difficulty`
+    zero hex chars. Difficulty 4 averages ~32k hashes (<100ms)."""
+    import hashlib
+
+    target = "0" * max(1, min(8, int(difficulty)))
+    for n in range(max_iterations):
+        nonce = str(n)
+        digest = hashlib.sha256(f"{challenge_id}:{nonce}".encode()).hexdigest()
+        if digest.startswith(target):
+            return nonce
+    raise ToolError("proof-of-work search exhausted; retry with a new challenge")
+
+
+def solve_zone(zone_from: int, cost: int) -> int:
+    """The numogram routing puzzle: zone_to with zone_from - zone_to == cost."""
+    return int(zone_from) - int(cost)
+
+
+def tool_onboard_sandbox(args: Mapping[str, Any]) -> Any:
+    """Full self-serve onboarding: request a challenge, solve the zone
+    routing + proof of work, mint a sandbox API key. No human, no account."""
+    _reject_unknown_args(args, {"name"})
+    challenge = _json_request("POST", "/api/agent/onboard/challenge")
+    challenge_id = challenge.get("challenge_id")
+    protocol = challenge.get("reception_protocol") or {}
+    pow_spec = challenge.get("proof_of_work") or {}
+    if not challenge_id or "zone_from" not in protocol:
+        raise ToolError(f"unexpected challenge response: {json.dumps(_redact(challenge))[:400]}")
+
+    zone_to = solve_zone(protocol["zone_from"], protocol["cost"])
+    nonce = solve_pow(challenge_id, pow_spec.get("difficulty", 4))
+    body = {"challenge_id": challenge_id, "zone_to": zone_to, "pow_nonce": nonce}
+    name = args.get("name")
+    if isinstance(name, str) and name.strip():
+        body["name"] = name.strip()[:64]
+
+    minted = _json_request("POST", "/api/agent/onboard", body=body)
+    key = minted.get("api_key")
+    if key:
+        global _RUNTIME_API_KEY
+        _RUNTIME_API_KEY = key
+        SENSITIVE_RUNTIME_VALUES.append(key)
+    return {
+        "api_key": key,
+        "tier": minted.get("tier"),
+        "expires_at": minted.get("expires_at"),
+        "limits": minted.get("limits"),
+        "note": "Key stored for this session; create_bot_match will use it automatically. "
+                "Save it if you want to keep playing after this process exits.",
+    }
+
+
+def tool_create_bot_match(args: Mapping[str, Any]) -> Any:
+    """Start a match against the house bot. Empty deck args = server-picked
+    protocol-legal starter decks (the recommended first match)."""
+    _reject_unknown_args(args, {"api_key", "deck"})
+    key = args.get("api_key") or configured_api_key()
+    if not key:
+        raise ToolError(
+            "no API key: pass api_key, set EIGENDARK_API_KEY, or call onboard_sandbox first"
+        )
+    body: Dict[str, Any] = {}
+    deck = args.get("deck")
+    if isinstance(deck, str) and deck.strip():
+        body["deck"] = deck.strip()
+    created = _json_request("POST", "/api/agent/match/create-bot", body=body, bearer=key)
+    return {
+        "match_id": created.get("match_id"),
+        "seat": created.get("seat", 0),
+        "token": created.get("token"),
+        "review_url": created.get("review_url"),
+        "next": "poll get_match_state(match_id, seat, token); when your_turn, submit_action.",
+    }
+
+
+def tool_share_replay(args: Mapping[str, Any]) -> Any:
+    """Create a human-shareable spectator link for a match. Paste the URL in
+    your transcript so your operator can watch the match you played."""
+    _reject_unknown_args(args, {"match_id", "token", "seat_token", "ttl_minutes"})
+    match_id = _require_string(args, "match_id")
+    token = _optional_token(args)
+    body: Dict[str, Any] = {"token": token}
+    ttl = args.get("ttl_minutes")
+    if ttl is not None:
+        body["ttl_minutes"] = int(ttl)
+    share = _json_request(
+        "POST",
+        f"/api/agent/match/{urllib.parse.quote(match_id, safe='')}/share",
+        body=body,
+    )
+    share_id = share.get("share_id") or share.get("id")
+    url = share.get("watch_url") or share.get("url")
+    if not url and share_id:
+        url = f"{configured_base_url()}/watch?share={share_id}"
+    return {
+        "share_id": share_id,
+        "human_url": url,
+        "note": "Show this link to your operator — it is a read-only live/replay view.",
+    }
+
+
 BASE_TOOLS = {
+    "onboard_sandbox": {
+        "description": (
+            "Self-onboard: mint a sandbox Eigendark API key with no account "
+            "(solves the agent-qualifier challenge automatically). Sandbox keys "
+            "are rate-limited, expire after 7 days, and are enough to play real matches."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"name": {"type": "string", "description": "Optional label for the key."}},
+            "additionalProperties": False,
+        },
+        "handler": tool_onboard_sandbox,
+        "returns_credentials": True,
+    },
+    "create_bot_match": {
+        "description": (
+            "Create a match against the house bot using an API key "
+            "(from onboard_sandbox, EIGENDARK_API_KEY, or the api_key argument). "
+            "Empty deck = server-picked starter decks."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "api_key": {"type": "string", "description": "ed_* key; defaults to session/env key."},
+                "deck": {"type": "string", "description": "Optional saved deck name."},
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_create_bot_match,
+        "returns_credentials": True,
+    },
+    "share_replay": {
+        "description": (
+            "Create a human-shareable spectator URL for a match you played — "
+            "paste it in your transcript so your operator can watch."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "match_id": {"type": "string"},
+                "token": {"type": "string", "description": "Seat token; defaults to EIGENDARK_SEAT_TOKEN."},
+                "seat_token": {"type": "string", "description": "Alias for token."},
+                "ttl_minutes": {"type": "integer", "description": "Optional share lifetime."},
+            },
+            "required": ["match_id"],
+            "additionalProperties": False,
+        },
+        "handler": tool_share_replay,
+    },
     "agent_protocol_guide": {
         "description": "Return the Eigendark agent protocol quick guide and action vocabulary.",
         "inputSchema": {"type": "object", "properties": {}, "additionalProperties": False},
@@ -345,15 +516,20 @@ def list_tools() -> Iterable[Dict[str, Any]]:
         }
 
 
-def _content_result(value: Any, *, is_error: bool = False) -> Dict[str, Any]:
+def _content_result(value: Any, *, is_error: bool = False, redact: bool = True) -> Dict[str, Any]:
+    # Credential-issuing tools (onboard_sandbox, create_bot_match) opt out of
+    # redaction for their OWN results — returning the key/seat token to the
+    # calling agent is their entire purpose. Everything else, including all
+    # error paths, stays redacted.
+    rendered = _redact(value) if redact else value
     return {
         "content": [
             {
                 "type": "text",
-                "text": json.dumps(_redact(value), indent=2, sort_keys=True),
+                "text": json.dumps(rendered, indent=2, sort_keys=True),
             }
         ],
-        "structuredContent": _redact(value) if not is_error else None,
+        "structuredContent": rendered if not is_error else None,
         "isError": is_error,
     }
 
@@ -387,7 +563,8 @@ def handle_request(message: Mapping[str, Any]) -> Optional[Dict[str, Any]]:
             return _jsonrpc_error(request_id, -32602, "arguments must be an object")
         try:
             result = tools[name]["handler"](args)
-            return {"jsonrpc": "2.0", "id": request_id, "result": _content_result(result)}
+            redact_result = not tools[name].get("returns_credentials", False)
+            return {"jsonrpc": "2.0", "id": request_id, "result": _content_result(result, redact=redact_result)}
         except ToolError as exc:
             return {
                 "jsonrpc": "2.0",

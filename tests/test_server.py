@@ -1,6 +1,8 @@
 import io
 import json
+import os
 import subprocess
+from pathlib import Path
 import sys
 import urllib.error
 
@@ -25,7 +27,7 @@ def test_initialize_response_advertises_tools():
     assert response["result"]["capabilities"]["tools"]["listChanged"] is False
 
 
-def test_tools_list_exposes_player_surface_by_default(monkeypatch):
+def test_tools_list_exposes_player_and_onboarding_surface(monkeypatch):
     response = mcp.handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
 
     tools = {tool["name"]: tool for tool in response["result"]["tools"]}
@@ -34,10 +36,39 @@ def test_tools_list_exposes_player_surface_by_default(monkeypatch):
         "get_match_state",
         "submit_action",
         "summarize_state",
+        "onboard_sandbox",
+        "create_bot_match",
+        "share_replay",
     }.issubset(tools)
-    assert "create_agent_match" not in tools
-    for tool in tools.values():
-        assert "api_key" not in tool["inputSchema"].get("properties", {})
+    # api_key appears ONLY where it is the point (match creation); the play
+    # loop stays seat-token based.
+    for name, tool in tools.items():
+        props = tool["inputSchema"].get("properties", {})
+        if name == "create_bot_match":
+            assert "api_key" in props
+        else:
+            assert "api_key" not in props
+
+
+def test_pow_solver_roundtrip():
+    challenge_id = "a" * 32
+    nonce = mcp.solve_pow(challenge_id, 2)
+    import hashlib
+    digest = hashlib.sha256(f"{challenge_id}:{nonce}".encode()).hexdigest()
+    assert digest.startswith("00")
+    assert mcp.solve_zone(8, 2) == 6
+
+
+def test_credential_tools_skip_result_redaction():
+    # onboard_sandbox / create_bot_match must return usable credentials;
+    # everything else stays redacted.
+    plain = mcp._content_result({"api_key": "ed_secret"}, redact=False)
+    assert plain["structuredContent"]["api_key"] == "ed_secret"
+    redacted = mcp._content_result({"api_key": "ed_secret"})
+    assert redacted["structuredContent"]["api_key"] == "[redacted]"
+    assert mcp.BASE_TOOLS["onboard_sandbox"].get("returns_credentials") is True
+    assert mcp.BASE_TOOLS["create_bot_match"].get("returns_credentials") is True
+    assert not mcp.BASE_TOOLS["get_match_state"].get("returns_credentials")
 
 
 def test_secret_fields_are_redacted_recursively():
@@ -136,11 +167,17 @@ def test_stdio_framed_initialize_smoke():
         },
     }
     raw = json.dumps(message).encode("utf-8")
+    env = dict(os.environ)
+    # Run from the checkout even when the package isn't installed into the
+    # test interpreter.
+    src_dir = str(Path(__file__).resolve().parents[1] / "src")
+    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
     proc = subprocess.Popen(
         [sys.executable, "-m", "eigendark_agent_mcp.server"],
         stdin=subprocess.PIPE,
         stdout=subprocess.PIPE,
         stderr=subprocess.PIPE,
+        env=env,
     )
     assert proc.stdin is not None
     assert proc.stdout is not None
