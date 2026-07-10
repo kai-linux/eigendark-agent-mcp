@@ -99,6 +99,31 @@ def test_localhost_base_url_is_allowed(monkeypatch):
     assert mcp._base_url_or_error() == "http://localhost:5000"
 
 
+@pytest.mark.parametrize(
+    "url",
+    [
+        "http://www.eigendark.com",
+        "https://www.eigendark.com:8443",
+        "https://user@www.eigendark.com",
+        "https://www.eigendark.com:not-a-port",
+        "https://www.eigendark.com?token=leak",
+        "https://www.eigendark.com#fragment",
+    ],
+)
+def test_production_base_url_rejects_unsafe_variants(monkeypatch, url):
+    monkeypatch.setenv("EIGENDARK_BASE_URL", url)
+    monkeypatch.delenv("EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL", raising=False)
+
+    with pytest.raises(mcp.ToolError, match="Refusing to send tokens"):
+        mcp._base_url_or_error()
+
+
+def test_production_base_url_requires_https_default_port(monkeypatch):
+    monkeypatch.setenv("EIGENDARK_BASE_URL", "https://www.eigendark.com:443")
+
+    assert mcp._base_url_or_error() == "https://www.eigendark.com:443"
+
+
 def test_create_match_is_not_a_public_tool():
     response = mcp.handle_request({
         "jsonrpc": "2.0",

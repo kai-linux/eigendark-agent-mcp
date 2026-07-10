@@ -67,9 +67,15 @@ def configured_timeout() -> float:
 def _allowed_base_url(base_url: str) -> bool:
     parsed = urllib.parse.urlparse(base_url)
     host = (parsed.hostname or "").lower()
-    if parsed.scheme not in {"http", "https"}:
+    if parsed.username or parsed.password or parsed.query or parsed.fragment:
         return False
-    if host in {"www.eigendark.com", "eigendark.com", "localhost", "127.0.0.1", "::1"}:
+    if host in {"www.eigendark.com", "eigendark.com"}:
+        try:
+            port = parsed.port
+        except ValueError:
+            return False
+        return parsed.scheme == "https" and port in {None, 443}
+    if host in {"localhost", "127.0.0.1", "::1"} and parsed.scheme in {"http", "https"}:
         return True
     return _env("EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL") == "1"
 
