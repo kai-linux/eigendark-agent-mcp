@@ -38,13 +38,16 @@ def test_tools_list_exposes_player_and_onboarding_surface(monkeypatch):
         "summarize_state",
         "onboard_sandbox",
         "create_bot_match",
+        "join_matchmaking",
+        "matchmaking_status",
+        "leave_matchmaking",
         "share_replay",
     }.issubset(tools)
     # api_key appears ONLY where it is the point (match creation); the play
     # loop stays seat-token based.
     for name, tool in tools.items():
         props = tool["inputSchema"].get("properties", {})
-        if name == "create_bot_match":
+        if name in {"create_bot_match", "join_matchmaking", "matchmaking_status", "leave_matchmaking"}:
             assert "api_key" in props
         else:
             assert "api_key" not in props
@@ -68,6 +71,8 @@ def test_credential_tools_skip_result_redaction():
     assert redacted["structuredContent"]["api_key"] == "[redacted]"
     assert mcp.BASE_TOOLS["onboard_sandbox"].get("returns_credentials") is True
     assert mcp.BASE_TOOLS["create_bot_match"].get("returns_credentials") is True
+    assert mcp.BASE_TOOLS["join_matchmaking"].get("returns_credentials") is True
+    assert mcp.BASE_TOOLS["matchmaking_status"].get("returns_credentials") is True
     assert not mcp.BASE_TOOLS["get_match_state"].get("returns_credentials")
 
 
@@ -137,6 +142,50 @@ def test_create_match_is_not_a_public_tool():
 
     assert response["error"]["code"] == -32602
     assert "unknown tool" in response["error"]["message"]
+
+
+def test_matchmaking_join_and_status_keep_ticket_in_memory(monkeypatch):
+    calls = []
+
+    def fake_request(method, path, *, body=None, query=None, bearer=None):
+        calls.append({"method": method, "path": path, "body": body, "bearer": bearer})
+        if path.endswith("/join"):
+            return {"status": "waiting", "ticket_secret": "mmt_secret", "poll_after_ms": 2000}
+        return {
+            "status": "matched",
+            "match": {"match_id": "M-test", "seat": 0, "token": "seat-secret"},
+        }
+
+    monkeypatch.setattr(mcp, "_json_request", fake_request)
+    monkeypatch.setattr(mcp, "_RUNTIME_MATCHMAKING_TICKET", None)
+    monkeypatch.setattr(mcp, "_RUNTIME_API_KEY", "ed_runtime")
+
+    joined = mcp.tool_join_matchmaking({"agent_id": "alpha"})
+    assert joined["status"] == "waiting"
+    assert mcp.configured_matchmaking_ticket() == "mmt_secret"
+
+    matched = mcp.tool_matchmaking_status({})
+    assert matched["match"] == {"match_id": "M-test", "seat": 0, "token": "seat-secret"}
+    assert calls == [
+        {
+            "method": "POST",
+            "path": "/api/agent/matchmaking/join",
+            "body": {"agent_id": "alpha"},
+            "bearer": "ed_runtime",
+        },
+        {
+            "method": "POST",
+            "path": "/api/agent/matchmaking/status",
+            "body": {"ticket_secret": "mmt_secret"},
+            "bearer": "ed_runtime",
+        },
+    ]
+
+
+def test_matchmaking_rejects_invalid_card_ids_before_http(monkeypatch):
+    monkeypatch.setattr(mcp, "_RUNTIME_API_KEY", "ed_runtime")
+    with pytest.raises(mcp.ToolError, match="card_ids"):
+        mcp.tool_join_matchmaking({"card_ids": ["ok", 42]})
 
 
 def test_api_key_argument_is_rejected_even_when_tool_called_directly():
