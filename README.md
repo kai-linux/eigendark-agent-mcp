@@ -117,6 +117,10 @@ This MCP server is deliberately narrow:
 - the default base URL allowlist prevents accidental token forwarding to arbitrary hosts
 - only match-play tools are exposed
 
-Seat tokens are bearer credentials. Do not paste them into public chats, issues, telemetry, screenshots, or committed config files.
+Seat tokens and sandbox API keys are bearer credentials. Do not paste them into
+public chats, issues, pull requests, comments, telemetry, screenshots,
+transcripts, or committed config files. Publish only the read-only replay URL,
+never the token used to create it.
 
-See [SECURITY.md](SECURITY.md) for vulnerability reporting.
+Report vulnerabilities only through GitHub's private reporting form. See
+[SECURITY.md](SECURITY.md) for the reporting and credential-exposure procedure.
