@@ -17,7 +17,7 @@ from typing import Any, Dict, Iterable, Mapping, Optional, Sequence
 
 
 SERVER_NAME = "eigendark-agent-mcp"
-SERVER_VERSION = "0.2.0"
+SERVER_VERSION = "0.3.0"
 PROTOCOL_VERSION = "2025-11-25"
 DEFAULT_BASE_URL = "https://www.eigendark.com"
 DEFAULT_TIMEOUT_SECONDS = 20
@@ -28,7 +28,10 @@ SECRET_KEYS = {
     "api_key",
     "apikey",
     "key",
+    "review_key",
     "seat_token",
+    "spectator_token",
+    "ticket_secret",
     "token",
 }
 
@@ -298,10 +301,15 @@ def tool_summarize_state(args: Mapping[str, Any]) -> Any:
 # A sandbox key minted at runtime is remembered for the process lifetime so
 # an agent can onboard once and then create matches without re-passing it.
 _RUNTIME_API_KEY: Optional[str] = None
+_RUNTIME_MATCHMAKING_TICKET: Optional[str] = None
 
 
 def configured_api_key() -> Optional[str]:
     return _env("EIGENDARK_API_KEY") or _env("ED_API_KEY") or _RUNTIME_API_KEY
+
+
+def configured_matchmaking_ticket() -> Optional[str]:
+    return _RUNTIME_MATCHMAKING_TICKET
 
 
 def solve_pow(challenge_id: str, difficulty: int, max_iterations: int = 5_000_000) -> str:
@@ -380,6 +388,92 @@ def tool_create_bot_match(args: Mapping[str, Any]) -> Any:
     }
 
 
+def _api_key_or_error(args: Mapping[str, Any]) -> str:
+    key = args.get("api_key") or configured_api_key()
+    if not isinstance(key, str) or not key:
+        raise ToolError(
+            "no API key: pass api_key, set EIGENDARK_API_KEY, or call onboard_sandbox first"
+        )
+    return key
+
+
+def _remember_match_credentials(payload: Mapping[str, Any]) -> None:
+    match = payload.get("match") if isinstance(payload.get("match"), Mapping) else payload
+    for field in ("token", "review_key", "spectator_token"):
+        value = match.get(field) if isinstance(match, Mapping) else None
+        if isinstance(value, str) and value:
+            SENSITIVE_RUNTIME_VALUES.append(value)
+
+
+def tool_join_matchmaking(args: Mapping[str, Any]) -> Any:
+    """Join public stranger matchmaking with an online-legal deck or the
+    server starter. The returned ticket stays in memory for status/leave."""
+    _reject_unknown_args(args, {"api_key", "agent_id", "deck", "card_ids"})
+    key = _api_key_or_error(args)
+    body: Dict[str, Any] = {}
+    for field in ("agent_id", "deck"):
+        value = args.get(field)
+        if isinstance(value, str) and value.strip():
+            body[field] = value.strip()
+    card_ids = args.get("card_ids")
+    if card_ids is not None:
+        if not isinstance(card_ids, list) or not all(isinstance(ref, str) and ref for ref in card_ids):
+            raise ToolError("card_ids must be an array of non-empty strings")
+        body["card_ids"] = card_ids
+    queued = _json_request("POST", "/api/agent/matchmaking/join", body=body, bearer=key)
+    ticket = queued.get("ticket_secret")
+    if isinstance(ticket, str) and ticket:
+        global _RUNTIME_MATCHMAKING_TICKET
+        _RUNTIME_MATCHMAKING_TICKET = ticket
+        SENSITIVE_RUNTIME_VALUES.append(ticket)
+    _remember_match_credentials(queued)
+    return {
+        **queued,
+        "next": (
+            "Call matchmaking_status after poll_after_ms. When matched, use the returned "
+            "match_id, seat, and token with get_match_state."
+            if queued.get("status") == "waiting"
+            else "Use match.match_id, match.seat, and match.token with get_match_state."
+        ),
+    }
+
+
+def _ticket_or_error(args: Mapping[str, Any]) -> str:
+    ticket = args.get("ticket_secret") or configured_matchmaking_ticket()
+    if not isinstance(ticket, str) or not ticket:
+        raise ToolError("ticket_secret is required; call join_matchmaking first or pass it explicitly")
+    return ticket
+
+
+def tool_matchmaking_status(args: Mapping[str, Any]) -> Any:
+    _reject_unknown_args(args, {"api_key", "ticket_secret"})
+    key = _api_key_or_error(args)
+    ticket = _ticket_or_error(args)
+    status = _json_request(
+        "POST",
+        "/api/agent/matchmaking/status",
+        body={"ticket_secret": ticket},
+        bearer=key,
+    )
+    _remember_match_credentials(status)
+    return status
+
+
+def tool_leave_matchmaking(args: Mapping[str, Any]) -> Any:
+    _reject_unknown_args(args, {"api_key", "ticket_secret"})
+    key = _api_key_or_error(args)
+    ticket = _ticket_or_error(args)
+    result = _json_request(
+        "POST",
+        "/api/agent/matchmaking/leave",
+        body={"ticket_secret": ticket},
+        bearer=key,
+    )
+    global _RUNTIME_MATCHMAKING_TICKET
+    _RUNTIME_MATCHMAKING_TICKET = None
+    return result
+
+
 def tool_share_replay(args: Mapping[str, Any]) -> Any:
     """Create a human-shareable spectator link for a match. Paste the URL in
     your transcript so your operator can watch the match you played."""
@@ -437,6 +531,49 @@ BASE_TOOLS = {
         },
         "handler": tool_create_bot_match,
         "returns_credentials": True,
+    },
+    "join_matchmaking": {
+        "description": (
+            "Join API-key-authenticated public stranger matchmaking. Empty deck/card_ids uses "
+            "an online-legal server starter. Returns a private short-lived ticket."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "api_key": {"type": "string", "description": "ed_* key; defaults to session/env key."},
+                "agent_id": {"type": "string", "description": "Stable public agent id."},
+                "deck": {"type": "string", "description": "Optional saved deck name."},
+                "card_ids": {"type": "array", "items": {"type": "string"}, "maxItems": 80},
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_join_matchmaking,
+        "returns_credentials": True,
+    },
+    "matchmaking_status": {
+        "description": "Poll the current public matchmaking ticket and receive only your seat credentials when paired.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "api_key": {"type": "string", "description": "ed_* key; defaults to session/env key."},
+                "ticket_secret": {"type": "string", "description": "Defaults to the last join_matchmaking ticket."},
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_matchmaking_status,
+        "returns_credentials": True,
+    },
+    "leave_matchmaking": {
+        "description": "Cancel the current ticket while it is still waiting.",
+        "inputSchema": {
+            "type": "object",
+            "properties": {
+                "api_key": {"type": "string", "description": "ed_* key; defaults to session/env key."},
+                "ticket_secret": {"type": "string", "description": "Defaults to the last join_matchmaking ticket."},
+            },
+            "additionalProperties": False,
+        },
+        "handler": tool_leave_matchmaking,
     },
     "share_replay": {
         "description": (
@@ -523,7 +660,7 @@ def list_tools() -> Iterable[Dict[str, Any]]:
 
 
 def _content_result(value: Any, *, is_error: bool = False, redact: bool = True) -> Dict[str, Any]:
-    # Credential-issuing tools (onboard_sandbox, create_bot_match) opt out of
+    # Credential-delivery tools opt out of
     # redaction for their OWN results — returning the key/seat token to the
     # calling agent is their entire purpose. Everything else, including all
     # error paths, stays redacted.
