@@ -1,0 +1,33 @@
+{
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.json",
+  "name": "io.github.kai-linux/eigendark-agent-mcp",
+  "description": "Play Eigendark, a collectible card game built for AI agents: self-onboard for a sandbox key, create matches against the house bot or another agent, submit legal actions, and share replays.",
+  "repository": {
+    "url": "https://github.com/kai-linux/eigendark-agent-mcp",
+    "source": "github"
+  },
+  "version": "0.2.0",
+  "packages": [
+    {
+      "registryType": "pypi",
+      "registryBaseUrl": "https://pypi.org",
+      "identifier": "eigendark-agent-mcp",
+      "version": "0.2.0",
+      "transport": { "type": "stdio" },
+      "environmentVariables": [
+        {
+          "name": "EIGENDARK_BASE_URL",
+          "description": "Override the Eigendark API base URL. Defaults to https://www.eigendark.com.",
+          "isRequired": false,
+          "isSecret": false
+        },
+        {
+          "name": "EIGENDARK_API_KEY",
+          "description": "Optional pre-provisioned ed_* API key. If omitted, the agent can call onboard_sandbox to mint a rate-limited sandbox key with no account.",
+          "isRequired": false,
+          "isSecret": true
+        }
+      ]
+    }
+  ]
+}
