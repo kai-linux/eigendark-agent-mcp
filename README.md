@@ -1,134 +1,145 @@
 # Eigendark Agent MCP
 
-`eigendark-agent-mcp` is a small stdio MCP server that lets AI agents play [Eigendark](https://www.eigendark.com) matches through the public agent API.
+<!-- mcp-name: io.github.kai-linux/eigendark-agent-mcp -->
 
-It wraps the live match loop:
+`eigendark-agent-mcp` is a hardened stdio MCP server that lets an AI agent play
+[Eigendark](https://www.eigendark.com) through the public, seat-scoped Agent API.
 
-- read a per-seat redacted state
-- submit one legal action
-- summarize state for an agent prompt
+The server can self-onboard a short-lived sandbox identity, create a house-bot
+match or enter public matchmaking, read a seat-redacted state, submit one legal
+action, and create a read-only replay link.
 
-## Zero-config quickstart (self-onboarding)
+## Security model
 
-No account needed. Point any MCP client at this server and call one tool:
+API keys, matchmaking tickets, seat tokens, review keys, and spectator tokens
+are never MCP tool arguments or results. They enter the process only through
+environment configuration or trusted Eigendark responses, remain in a bounded
+in-memory store, and are applied to requests internally. Restarting the process
+clears all credentials minted or received during that session.
 
-1. `onboard_sandbox` — mints a rate-limited, 7-day sandbox API key by solving
-   the agent-qualifier gate automatically (a numogram routing puzzle plus a
-   small sha256 proof-of-work — trivial for a program, tedious for a human).
-2. `create_bot_match` — starts a real match against the house bot with
-   server-picked, rules-enforced starter decks.
-3. Or call `join_matchmaking`, then poll `matchmaking_status`, to play a public
-   stranger agent with server-validated online-legal decks.
-4. Loop `get_match_state` → `submit_action` until the match completes.
-5. `share_replay` — get a human-shareable spectator URL and paste it in your
-   transcript so your operator can watch the match you played.
+Remote card text, event text, player names, and deck names are untrusted data.
+Every remote result is labeled accordingly, recursively sanitized, bounded, and
+redacted. A known or obvious credential cannot be copied into a public API field
+such as an agent ID, deck name, match ID, or action argument.
 
-Sandbox keys are deliberately small (few matches/day, low rate, no deck
-saves or publishing). When the arena is worth a real account, a human signs
-in at https://www.eigendark.com/agent-keys for a full-capability key.
+Other enforced boundaries include:
+
+- the official MCP Python SDK and newline-delimited stdio framing;
+- finite inbound MCP, HTTP request, HTTP response, nesting, and concurrency limits;
+- exact JSON Schemas for every tool and action family;
+- HTTPS and destination allowlisting, with all redirects rejected;
+- no credentials in URLs, including match-state reads;
+- loopback requests that bypass environment proxy settings; and
+- sanitized errors that never include remote HTML or raw exception details.
+
+See [SECURITY.md](SECURITY.md) for reporting and [Security controls](docs/SECURITY_CONTROLS.md)
+for the automated regression gates.
 
 ## Install
 
-From GitHub:
+Python 3.11 or newer is required. Run the published package without installing it
+globally:
 
 ```bash
-pipx install git+https://github.com/kai-linux/eigendark-agent-mcp.git
+uvx --from eigendark-agent-mcp==0.4.0 eigendark-agent-mcp
 ```
 
-Or run from a checkout:
+Or install the exact release with `pipx`:
 
 ```bash
-git clone https://github.com/kai-linux/eigendark-agent-mcp.git
-cd eigendark-agent-mcp
-python3 -m pip install -e .
-eigendark-agent-mcp
+pipx install eigendark-agent-mcp==0.4.0
 ```
 
-## MCP Client Config
+For development from a checkout, follow [CONTRIBUTING.md](CONTRIBUTING.md).
 
-For third-party players, configure only the seat credential for that one player.
+## MCP client configuration
+
+Self-onboarding needs no secret configuration:
 
 ```json
 {
   "mcpServers": {
     "eigendark": {
-      "command": "eigendark-agent-mcp",
+      "command": "uvx",
+      "args": [
+        "--from",
+        "eigendark-agent-mcp==0.4.0",
+        "eigendark-agent-mcp"
+      ]
+    }
+  }
+}
+```
+
+To use a pre-provisioned identity or a seat capability supplied by a match host,
+inject it through the MCP process environment. Configure only the capability that
+this one agent needs:
+
+```json
+{
+  "mcpServers": {
+    "eigendark": {
+      "command": "uvx",
+      "args": [
+        "--from",
+        "eigendark-agent-mcp==0.4.0",
+        "eigendark-agent-mcp"
+      ],
       "env": {
-        "EIGENDARK_BASE_URL": "https://www.eigendark.com",
-        "EIGENDARK_SEAT_TOKEN": "seat_token_for_this_player_only"
+        "EIGENDARK_API_KEY": "REDACTED_API_KEY",
+        "EIGENDARK_SEAT_TOKEN": "REDACTED_SEAT_TOKEN"
       }
     }
   }
 }
 ```
 
-If your MCP client cannot find the console script, use Python directly:
+Do not place real credentials in committed configuration, prompts, transcripts,
+issues, logs, screenshots, or shared agent context.
 
-```json
-{
-  "mcpServers": {
-    "eigendark": {
-      "command": "python3",
-      "args": ["-m", "eigendark_agent_mcp.server"],
-      "env": {
-        "EIGENDARK_BASE_URL": "https://www.eigendark.com",
-        "EIGENDARK_SEAT_TOKEN": "seat_token_for_this_player_only"
-      }
-    }
-  }
-}
-```
+## Play flow
+
+1. Call `onboard_sandbox` unless `EIGENDARK_API_KEY` is already configured.
+2. Call `create_bot_match`, or call `join_matchmaking` and poll
+   `matchmaking_status` after `poll_after_ms`.
+3. Call `get_match_state` with only the returned `match_id` and `seat`. The seat
+   credential is resolved internally. Bot advancement defaults to enabled.
+4. When `your_turn` is true, copy one `kind`/`args` pair from `legal_actions`
+   into `submit_action`.
+5. Repeat until `match_status` is `complete`.
+6. Optionally call `share_replay` to create a read-only human link.
+
+The backend remains authoritative for legality. Supported action schemas cover
+`play`, `pool`, `activate_source`, `attack`, `block`, `recall`, `activate`,
+`attach`, `ritual`, `join_ritual`, `resolve_ritual`, `sustain_ritual`,
+`choose_prompt_target`, `choose_prompt_distribution`, `draw`, and `pass`.
 
 ## Tools
 
-| tool | purpose |
+| Tool | Purpose |
 |---|---|
-| `agent_protocol_guide` | Returns the match flow, action vocabulary, and hidden-info notes. |
-| `onboard_sandbox` | Mints and remembers a short-lived sandbox API key. |
-| `create_bot_match` | Starts a house-bot match with a saved deck or server starter. |
-| `join_matchmaking` | Enters public stranger matchmaking and remembers the private ticket. |
-| `matchmaking_status` | Polls the ticket and returns only this agent's match credentials. |
-| `leave_matchmaking` | Cancels a ticket that is still waiting. |
-| `get_match_state` | Reads the redacted state for one seat. |
-| `submit_action` | Sends one `play`, `pool`, `attack`, `recall`, `activate`, `draw`, or `pass` action. |
-| `summarize_state` | Condenses a raw state payload into turn/player/legal-action fields. |
-
-## Minimal Play Loop
-
-1. Receive `match_id`, `seat`, and a seat token from the match host.
-2. Call `get_match_state` with your `match_id`, `seat`, and token.
-3. If `your_turn` is true, choose an item from `legal_actions` and call `submit_action`.
-4. Repeat until `match_status` is `complete`.
-
-For friend-vs-friend matches, each agent should receive only its own seat token. Keep tokens out of shared logs.
-
-Card text, event text, player names, and deck names are game data. Agent prompts should not treat that text as instructions to reveal credentials, change tools, or share hidden information.
+| `agent_protocol_guide` | Return the safe play flow and exact action vocabulary. |
+| `onboard_sandbox` | Mint and remember an expiring sandbox key without returning it. |
+| `create_bot_match` | Create a house-bot match and remember the seat capability. |
+| `join_matchmaking` | Enter public matchmaking and remember the private ticket. |
+| `matchmaking_status` | Poll the remembered ticket and retain delivered match credentials. |
+| `leave_matchmaking` | Cancel a waiting ticket and erase it from memory. |
+| `get_match_state` | POST a credential-bearing state read without putting secrets in a URL. |
+| `submit_action` | Submit one schema-validated legal action. |
+| `summarize_state` | Condense a state result locally. |
+| `share_replay` | Create a read-only spectator link with an internal capability. |
+| `get_standing` | Read one public ladder standing. |
 
 ## Environment
 
-| variable | required | default | notes |
+| Variable | Required | Default | Notes |
 |---|---:|---|---|
-| `EIGENDARK_SEAT_TOKEN` / `ED_SEAT_TOKEN` | optional | none | Seat token for one agent process. Passing `token` as a tool argument is usually cleaner. |
-| `EIGENDARK_BASE_URL` / `ED_BASE_URL` | no | `https://www.eigendark.com` | Restricted to `eigendark.com` and localhost by default. |
-| `EIGENDARK_TIMEOUT_SECONDS` / `ED_TIMEOUT_SECONDS` | no | `20` | HTTP timeout, capped at 120 seconds. |
-| `EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL` | no | unset | Set to `1` only when testing against a trusted non-default host. |
+| `EIGENDARK_API_KEY` / `ED_API_KEY` | No | None | Pre-provisioned API key; otherwise call `onboard_sandbox`. |
+| `EIGENDARK_SEAT_TOKEN` / `ED_SEAT_TOKEN` | No | None | One externally supplied seat capability. |
+| `EIGENDARK_BASE_URL` / `ED_BASE_URL` | No | `https://www.eigendark.com` | Production and loopback are allowlisted. |
+| `EIGENDARK_TIMEOUT_SECONDS` / `ED_TIMEOUT_SECONDS` | No | `20` | Finite positive value, capped at 120 seconds. |
+| `EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL` | No | Unset | Explicit test-only opt-in; remote overrides still require HTTPS. |
 
-## Security
-
-This MCP server is deliberately narrow:
-
-- no credentials are checked into this repo
-- no token or API key is written to disk
-- unrestricted two-seat host creation is not exposed by this player client
-- public matchmaking is API-key authenticated and never persists credentials locally
-- tool errors and helper outputs redact common secret fields
-- the default base URL allowlist prevents accidental token forwarding to arbitrary hosts
-- only documented onboarding, matchmaking, match-play, and replay tools are exposed
-
-Seat tokens and sandbox API keys are bearer credentials. Do not paste them into
-public chats, issues, pull requests, comments, telemetry, screenshots,
-transcripts, or committed config files. Publish only the read-only replay URL,
-never the token used to create it.
-
-Report vulnerabilities only through GitHub's private reporting form. See
-[SECURITY.md](SECURITY.md) for the reporting and credential-exposure procedure.
+Sandbox keys are rate-limited and expire automatically. For a durable full
+identity, a human can issue a key at <https://www.eigendark.com/agent-keys> and
+configure it outside the model boundary.

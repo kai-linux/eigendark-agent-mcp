@@ -18,10 +18,25 @@ Rules for changes:
 Before opening a pull request:
 
 ```bash
-python3 -m pip install -e ".[dev]"
-python3 -m pytest
-python3 -m py_compile src/eigendark_agent_mcp/server.py
+uv venv --seed --python 3.12 .venv
+.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+.venv/bin/python -m pip install --no-deps --no-build-isolation -e .
+.venv/bin/ruff check src tests scripts
+.venv/bin/ruff format --check src tests scripts
+.venv/bin/pytest --cov=eigendark_agent_mcp
+.venv/bin/bandit -c pyproject.toml -r src
+.venv/bin/pip-audit --require-hashes -r requirements-runtime.lock
+.venv/bin/python -m build --no-isolation
+.venv/bin/twine check dist/*
 ```
+
+Dependencies are hash-locked. When `pyproject.toml` changes, regenerate all
+three lock files with the exact `uv` version recorded in CI and commit the
+result. CI recompiles them and rejects drift.
+
+Every security fix must include a regression test for the violated invariant
+and, where applicable, a workflow or metadata check that prevents recurrence.
+The control-to-gate map lives in [docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md).
 
 If a secret reaches a commit, comment, CI log, or attachment, revoke it and
 follow the exposure procedure in [SECURITY.md](SECURITY.md). Do not repost it.

@@ -1,0 +1,55 @@
+vulnerabilities:
+  - id: CVE-2026-53615
+    statement: >-
+      Debian 13 has no fixed util-linux package. The server never opens block
+      devices or invokes libblkid, runs without device capabilities, and has no
+      subprocess surface. Reassess on the next base-image refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2026-41992
+    statement: >-
+      Debian 13 has no fixed gzip package. The runtime never invokes gzip or
+      accepts archive files, and application input cannot reach this command.
+      Reassess on the next base-image refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2025-69720
+    statement: >-
+      The affected ncurses infocmp command is never invoked by this stdio
+      service and no terminfo data is accepted. Debian 13 has no fixed package.
+      Reassess on the next base-image refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2026-54369
+    statement: >-
+      The affected pathname ACL functions are never called, the service runs as
+      an unprivileged user, and it processes no caller-selected filesystem paths.
+      Debian 13 has no fixed package; reassess on the next base refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2026-42496
+    statement: >-
+      The affected Perl Archive::Tar extraction code is never invoked and the
+      service accepts no archives or filesystem paths. Debian 13 has no fixed
+      package; reassess on the next base-image refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2026-42497
+    statement: >-
+      The affected Perl Archive::Tar hardlink extraction code is never invoked
+      and the service accepts no archives or filesystem paths. Debian 13 has no
+      fixed package; reassess on the next base-image refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2026-48962
+    statement: >-
+      The affected Perl IO::Compress File::GlobMapper module is never imported
+      or invoked, and no output glob is accepted. Debian 13 has no fixed package;
+      reassess on the next base-image refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2026-8376
+    statement: >-
+      This Perl regular-expression overflow affects only 32-bit builds; the
+      published container is linux/amd64. Perl is not invoked by the service.
+      Debian 13 has no fixed package; reassess on the next base refresh.
+    expired_at: 2026-08-11
+  - id: CVE-2026-9538
+    statement: >-
+      The affected Perl Archive::Tar entry reader is never invoked and the
+      service accepts no archive input. Debian 13 has no fixed package; reassess
+      on the next base-image refresh.
+    expired_at: 2026-08-11

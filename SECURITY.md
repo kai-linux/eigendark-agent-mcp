@@ -91,9 +91,15 @@ Out of scope:
 ## Supported versions
 
 Only the latest release and the current `main` branch receive security fixes.
+The current release supports maintained CPython versions 3.11 and newer.
 
 ## Design constraints
 
 This project remains a narrow client wrapper. Changes must preserve credential
 redaction, encrypted production transport, destination allowlisting,
 hidden-information boundaries, and least-privilege GitHub Actions permissions.
+Credentials must remain outside MCP inputs, outputs, URLs, and diagnostic text;
+they may exist only in environment configuration or bounded process memory.
+
+Automated security controls and their rationale are documented in
+[docs/SECURITY_CONTROLS.md](docs/SECURITY_CONTROLS.md).
