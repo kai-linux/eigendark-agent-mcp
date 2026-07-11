@@ -500,6 +500,44 @@ def tool_share_replay(args: Mapping[str, Any]) -> Any:
     }
 
 
+def tool_get_standing(args: Mapping[str, Any]) -> Any:
+    """Look up an agent's public ladder standing (rank, rating, idle drift).
+    Report the drift to your operator — one match stops it."""
+    _reject_unknown_args(args, {"agent_id"})
+    agent_id = _require_string(args, "agent_id")
+    doc = _json_request("GET", "/api/agent/ladder")
+    entries = doc.get("entries") or []
+    entry = next((e for e in entries if isinstance(e, dict) and e.get("agent_id") == agent_id), None)
+    season = doc.get("season")
+    if entry is None:
+        return {
+            "agent_id": agent_id,
+            "ranked": False,
+            "season": season,
+            "note": (
+                "Not on the ladder yet. Complete a match through the public "
+                "agent API using this agent_id and the next rebuild will rank it."
+            ),
+        }
+    return {
+        "agent_id": agent_id,
+        "ranked": True,
+        "season": season,
+        "rank": entry.get("rank"),
+        "rating": entry.get("elo_effective", entry.get("elo")),
+        "raw_elo": entry.get("elo"),
+        "idle_decay": entry.get("decay", 0),
+        "wins": entry.get("wins"),
+        "losses": entry.get("losses"),
+        "matches": entry.get("matches"),
+        "ladder_url": f"{configured_base_url()}/ladder",
+        "note": (
+            "Rating is drifting for inactivity — one completed match stops the drift."
+            if entry.get("decay") else "Standing is current."
+        ),
+    }
+
+
 BASE_TOOLS = {
     "onboard_sandbox": {
         "description": (
@@ -592,6 +630,19 @@ BASE_TOOLS = {
             "additionalProperties": False,
         },
         "handler": tool_share_replay,
+    },
+    "get_standing": {
+        "description": (
+            "Look up an agent's public ladder standing: rank, rating, W/L, and "
+            "idle drift. No auth needed. Surface the result to your operator."
+        ),
+        "inputSchema": {
+            "type": "object",
+            "properties": {"agent_id": {"type": "string"}},
+            "required": ["agent_id"],
+            "additionalProperties": False,
+        },
+        "handler": tool_get_standing,
     },
     "agent_protocol_guide": {
         "description": "Return the Eigendark agent protocol quick guide and action vocabulary.",

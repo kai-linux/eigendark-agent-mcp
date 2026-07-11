@@ -42,6 +42,7 @@ def test_tools_list_exposes_player_and_onboarding_surface(monkeypatch):
         "matchmaking_status",
         "leave_matchmaking",
         "share_replay",
+        "get_standing",
     }.issubset(tools)
     # api_key appears ONLY where it is the point (match creation); the play
     # loop stays seat-token based.
