@@ -19,7 +19,7 @@ Before opening a pull request:
 
 ```bash
 uv venv --seed --python 3.12 .venv
-.venv/bin/python -m pip install --require-hashes -r requirements-dev.lock
+.venv/bin/python -m pip install --only-binary=:all: --require-hashes -r requirements-dev.lock
 .venv/bin/python -m pip install --no-deps --no-build-isolation -e .
 .venv/bin/ruff check src tests scripts
 .venv/bin/ruff format --check src tests scripts

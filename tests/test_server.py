@@ -5,6 +5,7 @@ import os
 import subprocess
 import sys
 import tempfile
+import threading
 from pathlib import Path
 
 import anyio
@@ -110,6 +111,49 @@ def test_direct_server_handlers_cover_success_and_safe_failures(monkeypatch):
         expected = await server.call_tool("agent_protocol_guide", {})
         assert expected.isError is True
         assert "safe error" in expected.content[0].text
+
+    anyio.run(scenario)
+
+
+def test_cancelled_tool_call_keeps_limiter_slot_until_worker_exits(monkeypatch):
+    first_started = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+
+    def blocking_invoke(name, arguments):  # noqa: ANN001, ANN202
+        if name == "first":
+            first_started.set()
+            if not release_first.wait(timeout=2):
+                raise RuntimeError("test worker timed out")
+        else:
+            second_started.set()
+        return {"security_notice": "test"}
+
+    monkeypatch.setattr(server, "invoke_tool", blocking_invoke)
+
+    async def scenario() -> None:
+        monkeypatch.setattr(server, "TOOL_LIMITER", anyio.CapacityLimiter(1))
+        first_scope = anyio.CancelScope()
+
+        async def first_call() -> None:
+            with first_scope:
+                await server.call_tool("first", {})
+
+        try:
+            async with anyio.create_task_group() as task_group:
+                task_group.start_soon(first_call)
+                assert await anyio.to_thread.run_sync(first_started.wait, 1)
+                first_scope.cancel()
+                await anyio.sleep(0)
+
+                task_group.start_soon(server.call_tool, "second", {})
+                await anyio.sleep(0.05)
+                assert not second_started.is_set()
+
+                release_first.set()
+                assert await anyio.to_thread.run_sync(second_started.wait, 1)
+        finally:
+            release_first.set()
 
     anyio.run(scenario)
 

@@ -24,13 +24,17 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install hash-locked scanners
-        run: python -m pip install --require-hashes -r requirements-dev.lock
+        run: >-
+          python -m pip install --only-binary=:all: --require-hashes -r requirements-dev.lock
       - name: Audit dependencies and exception expiry
         run: |
           pip-audit --require-hashes -r requirements-runtime.lock
+          pip-audit --require-hashes -r requirements-dev.lock
           python scripts/check_trivy_exceptions.py
       - name: Verify published package and MCP Registry record
-        run: python scripts/check_release_metadata.py --check-pypi --check-registry
+        run: >-
+          python scripts/check_release_metadata.py --check-pypi
+          --verify-pypi-attestations --check-registry
 
   container:
     runs-on: ubuntu-latest

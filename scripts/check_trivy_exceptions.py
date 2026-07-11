@@ -13,6 +13,7 @@ import yaml
 ROOT = Path(__file__).resolve().parents[1]
 IGNORE_FILE = ROOT / ".trivyignore.yaml"
 CVE = re.compile(r"^CVE-\d{4}-\d{4,}$")
+DEBIAN_PURL = re.compile(r"^pkg:deb/debian/[A-Za-z0-9.+-]+@[^?\s]+\?[^\s]+$")
 MAX_EXCEPTION_LIFETIME = timedelta(days=45)
 
 
@@ -32,6 +33,7 @@ def main() -> int:
         identifier = entry.get("id")
         statement = entry.get("statement")
         expiry = entry.get("expired_at")
+        purls = entry.get("purls")
         if not isinstance(identifier, str) or not CVE.fullmatch(identifier):
             failures.append(f"invalid vulnerability ID: {identifier!r}")
             continue
@@ -40,6 +42,21 @@ def main() -> int:
         seen.add(identifier)
         if not isinstance(statement, str) or len(statement.strip()) < 80:
             failures.append(f"{identifier} needs a meaningful risk and reachability statement")
+        if not isinstance(purls, list) or not purls:
+            failures.append(f"{identifier} must be scoped to exact Debian package URLs")
+        elif any(not isinstance(purl, str) for purl in purls):
+            failures.append(f"{identifier} package URLs must all be strings")
+        elif len(purls) != len(set(purls)):
+            failures.append(f"{identifier} contains duplicate package URLs")
+        else:
+            for purl in purls:
+                if (
+                    not DEBIAN_PURL.fullmatch(purl)
+                    or "arch=" not in purl
+                    or "distro=debian-" not in purl
+                    or "*" in purl
+                ):
+                    failures.append(f"{identifier} has an unscoped package URL: {purl!r}")
         if not isinstance(expiry, date):
             failures.append(f"{identifier} needs a YAML date in expired_at")
         elif expiry < today:

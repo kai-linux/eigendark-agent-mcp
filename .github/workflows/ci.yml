@@ -34,7 +34,7 @@ jobs:
           python-version: ${{ matrix.python-version }}
       - name: Install hash-locked test environment
         run: |
-          python -m pip install --require-hashes -r requirements-dev.lock
+          python -m pip install --only-binary=:all: --require-hashes -r requirements-dev.lock
           python -m pip install --no-deps --no-build-isolation -e .
           python -m pip check
       - name: Test official MCP client integration with coverage
@@ -55,7 +55,8 @@ jobs:
           version: "0.11.1"
           enable-cache: false
       - name: Install hash-locked quality tools
-        run: python -m pip install --require-hashes -r requirements-dev.lock
+        run: >-
+          python -m pip install --only-binary=:all: --require-hashes -r requirements-dev.lock
       - name: Lint and format
         run: |
           ruff check src tests scripts
@@ -63,7 +64,9 @@ jobs:
       - name: Static security analysis
         run: bandit -c pyproject.toml -r src
       - name: Audit runtime dependencies
-        run: pip-audit --require-hashes -r requirements-runtime.lock
+        run: |
+          pip-audit --require-hashes -r requirements-runtime.lock
+          pip-audit --require-hashes -r requirements-dev.lock
       - name: Validate release and registry metadata
         run: |
           python scripts/check_release_metadata.py
@@ -97,17 +100,19 @@ jobs:
         with:
           python-version: "3.12"
       - name: Install hash-locked build tools
-        run: python -m pip install --require-hashes -r requirements-dev.lock
+        run: >-
+          python -m pip install --only-binary=:all: --require-hashes -r requirements-dev.lock
       - name: Build and inspect distributions
         run: |
           python -m build --no-isolation
           twine check dist/*
           python scripts/check_release_metadata.py
+          python scripts/check_distribution.py dist "$(python -c 'import tomllib; print(tomllib.load(open("pyproject.toml", "rb"))["project"]["version"])')"
       - name: Install the wheel into a clean environment
         run: |
           set -euo pipefail
           python -m venv /tmp/eigendark-wheel-smoke
-          /tmp/eigendark-wheel-smoke/bin/python -m pip install --require-hashes -r requirements-runtime.lock
+          /tmp/eigendark-wheel-smoke/bin/python -m pip install --only-binary=:all: --require-hashes -r requirements-runtime.lock
           /tmp/eigendark-wheel-smoke/bin/python -m pip install --no-deps dist/*.whl
           /tmp/eigendark-wheel-smoke/bin/python -m pip check
           response="$(printf '%s\n' '{"jsonrpc":"2.0","id":1,"method":"initialize","params":{"protocolVersion":"2025-11-25","capabilities":{},"clientInfo":{"name":"wheel-smoke","version":"1"}}}' | /tmp/eigendark-wheel-smoke/bin/eigendark-agent-mcp)"

@@ -12,7 +12,11 @@ Security redesign and first published package release:
 - rejected redirects and unsafe destinations before authenticated requests;
 - enforced exact per-action JSON Schemas, bounded remote data, prompt-injection
   labeling, broad redaction, and outbound secret-loss prevention;
+- kept canceled blocking calls inside the finite worker limit until their
+  underlying threads exit;
 - raised the Python floor to 3.11 and introduced hash-locked, audited dependencies;
 - modernized PyPI and MCP Registry metadata; and
-- added release provenance, package verification, CodeQL, secret scanning,
-  workflow linting, container scanning, scheduled rescans, and regression coverage.
+- added protected-commit release provenance, byte-for-byte artifact and
+  attestation verification, complete source-archive checks, CodeQL, expanded
+  secret scanning, workflow linting, package-scoped container scanning,
+  scheduled rescans, and regression coverage.

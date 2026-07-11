@@ -8,7 +8,7 @@ ENV PYTHONDONTWRITEBYTECODE=1 \
 WORKDIR /build
 
 COPY requirements-build.lock ./
-RUN python -m pip install --require-hashes --no-compile -r requirements-build.lock
+RUN python -m pip install --only-binary=:all: --require-hashes --no-compile -r requirements-build.lock
 
 COPY pyproject.toml README.md LICENSE ./
 COPY src ./src
@@ -31,7 +31,7 @@ WORKDIR /app
 RUN addgroup --system app && adduser --system --ingroup app app
 
 COPY requirements-runtime.lock ./
-RUN python -m pip install --require-hashes --no-compile -r requirements-runtime.lock
+RUN python -m pip install --only-binary=:all: --require-hashes --no-compile -r requirements-runtime.lock
 
 COPY --from=builder /dist/*.whl /tmp/dist/
 RUN python -m pip install --no-deps --no-compile /tmp/dist/*.whl \

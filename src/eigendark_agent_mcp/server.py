@@ -49,7 +49,10 @@ async def call_tool(name: str, arguments: dict[str, Any]) -> dict[str, Any] | ty
             invoke_tool,
             name,
             dict(arguments),
-            abandon_on_cancel=True,
+            # A cancelled host task must retain its limiter token until the
+            # blocking worker really exits. Abandoning it would let repeated
+            # cancellation create more live workers than the configured cap.
+            abandon_on_cancel=False,
             limiter=TOOL_LIMITER,
         )
     except ToolError as exc:
