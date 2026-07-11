@@ -1,0 +1,17 @@
+include .dockerignore
+include .env.example
+include .gitleaks.toml
+include .trivyignore.yaml
+include CHANGELOG.md
+include CONTRIBUTING.md
+include Dockerfile
+include SECURITY.md
+include requirements-build.in
+include requirements-build.lock
+include requirements-dev.lock
+include requirements-runtime.lock
+include server.json
+recursive-include .github *.yml
+recursive-include docs *.md
+recursive-include scripts *.py
+recursive-include tests *.py

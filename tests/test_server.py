@@ -1,270 +1,231 @@
+from __future__ import annotations
+
 import io
-import json
 import os
 import subprocess
-from pathlib import Path
 import sys
-import urllib.error
+import tempfile
+import threading
+from pathlib import Path
 
-import pytest
+import anyio
+from mcp import ClientSession, StdioServerParameters, types
+from mcp.client.stdio import stdio_client
 
-from eigendark_agent_mcp import server as mcp
+from eigendark_agent_mcp import __version__, server
+from eigendark_agent_mcp.errors import ToolError
 
-
-def test_initialize_response_advertises_tools():
-    response = mcp.handle_request({
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2025-11-25",
-            "capabilities": {},
-            "clientInfo": {"name": "test", "version": "0"},
-        },
-    })
-
-    assert response["result"]["serverInfo"]["name"] == "eigendark-agent-mcp"
-    assert response["result"]["capabilities"]["tools"]["listChanged"] is False
+ROOT = Path(__file__).resolve().parents[1]
 
 
-def test_tools_list_exposes_player_and_onboarding_surface(monkeypatch):
-    response = mcp.handle_request({"jsonrpc": "2.0", "id": 1, "method": "tools/list"})
+def test_official_mcp_client_conformance_and_safe_validation():
+    async def scenario() -> None:
+        with tempfile.TemporaryFile(mode="w+") as errlog:
+            parameters = StdioServerParameters(
+                command=sys.executable,
+                args=["-m", "eigendark_agent_mcp.server"],
+                cwd=ROOT,
+                env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+            )
+            async with (
+                stdio_client(parameters, errlog=errlog) as (read_stream, write_stream),
+                ClientSession(read_stream, write_stream) as session,
+            ):
+                initialized = await session.initialize()
+                assert initialized.serverInfo.name == "eigendark-agent-mcp"
+                assert initialized.serverInfo.version == __version__
+                listed = await session.list_tools()
+                assert len(listed.tools) == 11
+                for tool in listed.tools:
+                    assert "api_key" not in tool.inputSchema.get("properties", {})
+                    assert "token" not in tool.inputSchema.get("properties", {})
+                guide = await session.call_tool("agent_protocol_guide", {})
+                assert guide.isError is False
+                assert guide.structuredContent["security_notice"]
+                secret = "credential_from_model"
+                invalid = await session.call_tool(
+                    "submit_action",
+                    {
+                        "match_id": "M",
+                        "seat": 0,
+                        "kind": secret,
+                        "args": {},
+                    },
+                )
+                assert invalid.isError is True
+                assert secret not in invalid.content[0].text
+            errlog.seek(0)
+            assert errlog.read() == ""
 
-    tools = {tool["name"]: tool for tool in response["result"]["tools"]}
-    assert {
-        "agent_protocol_guide",
-        "get_match_state",
-        "submit_action",
-        "summarize_state",
-        "onboard_sandbox",
-        "create_bot_match",
-        "join_matchmaking",
-        "matchmaking_status",
-        "leave_matchmaking",
-        "share_replay",
-        "get_standing",
-    }.issubset(tools)
-    # api_key appears ONLY where it is the point (match creation); the play
-    # loop stays seat-token based.
-    for name, tool in tools.items():
-        props = tool["inputSchema"].get("properties", {})
-        if name in {"create_bot_match", "join_matchmaking", "matchmaking_status", "leave_matchmaking"}:
-            assert "api_key" in props
-        else:
-            assert "api_key" not in props
-
-
-def test_pow_solver_roundtrip():
-    challenge_id = "a" * 32
-    nonce = mcp.solve_pow(challenge_id, 2)
-    import hashlib
-    digest = hashlib.sha256(f"{challenge_id}:{nonce}".encode()).hexdigest()
-    assert digest.startswith("00")
-    assert mcp.solve_zone(8, 2) == 6
-
-
-def test_credential_tools_skip_result_redaction():
-    # onboard_sandbox / create_bot_match must return usable credentials;
-    # everything else stays redacted.
-    plain = mcp._content_result({"api_key": "ed_secret"}, redact=False)
-    assert plain["structuredContent"]["api_key"] == "ed_secret"
-    redacted = mcp._content_result({"api_key": "ed_secret"})
-    assert redacted["structuredContent"]["api_key"] == "[redacted]"
-    assert mcp.BASE_TOOLS["onboard_sandbox"].get("returns_credentials") is True
-    assert mcp.BASE_TOOLS["create_bot_match"].get("returns_credentials") is True
-    assert mcp.BASE_TOOLS["join_matchmaking"].get("returns_credentials") is True
-    assert mcp.BASE_TOOLS["matchmaking_status"].get("returns_credentials") is True
-    assert not mcp.BASE_TOOLS["get_match_state"].get("returns_credentials")
+    anyio.run(scenario)
 
 
-def test_secret_fields_are_redacted_recursively():
-    payload = {
-        "token": "seat-secret",
-        "nested": {"api_key": "credential-secret", "safe": "visible"},
-        "items": [{"Authorization": "Bearer hidden"}],
-    }
-
-    assert mcp._redact(payload) == {
-        "token": "[redacted]",
-        "nested": {"api_key": "[redacted]", "safe": "visible"},
-        "items": [{"Authorization": "[redacted]"}],
-    }
-
-
-def test_untrusted_base_url_is_rejected_by_default(monkeypatch):
-    monkeypatch.setenv("EIGENDARK_BASE_URL", "https://example.invalid")
-    monkeypatch.delenv("EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL", raising=False)
-
-    with pytest.raises(mcp.ToolError, match="Refusing to send tokens"):
-        mcp._base_url_or_error()
-
-
-def test_localhost_base_url_is_allowed(monkeypatch):
-    monkeypatch.setenv("EIGENDARK_BASE_URL", "http://localhost:5000")
-
-    assert mcp._base_url_or_error() == "http://localhost:5000"
-
-
-@pytest.mark.parametrize(
-    "url",
-    [
-        "http://www.eigendark.com",
-        "https://www.eigendark.com:8443",
-        "https://user@www.eigendark.com",
-        "https://www.eigendark.com:not-a-port",
-        "https://www.eigendark.com?token=leak",
-        "https://www.eigendark.com#fragment",
-    ],
-)
-def test_production_base_url_rejects_unsafe_variants(monkeypatch, url):
-    monkeypatch.setenv("EIGENDARK_BASE_URL", url)
-    monkeypatch.delenv("EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL", raising=False)
-
-    with pytest.raises(mcp.ToolError, match="Refusing to send tokens"):
-        mcp._base_url_or_error()
-
-
-def test_production_base_url_requires_https_default_port(monkeypatch):
-    monkeypatch.setenv("EIGENDARK_BASE_URL", "https://www.eigendark.com:443")
-
-    assert mcp._base_url_or_error() == "https://www.eigendark.com:443"
-
-
-def test_create_match_is_not_a_public_tool():
-    response = mcp.handle_request({
-        "jsonrpc": "2.0",
-        "id": 2,
-        "method": "tools/call",
-        "params": {
-            "name": "create_agent_match",
-            "arguments": {"deck_a": "A", "deck_b": "B"},
-        },
-    })
-
-    assert response["error"]["code"] == -32602
-    assert "unknown tool" in response["error"]["message"]
-
-
-def test_matchmaking_join_and_status_keep_ticket_in_memory(monkeypatch):
-    calls = []
-
-    def fake_request(method, path, *, body=None, query=None, bearer=None):
-        calls.append({"method": method, "path": path, "body": body, "bearer": bearer})
-        if path.endswith("/join"):
-            return {"status": "waiting", "ticket_secret": "mmt_secret", "poll_after_ms": 2000}
-        return {
-            "status": "matched",
-            "match": {"match_id": "M-test", "seat": 0, "token": "seat-secret"},
-        }
-
-    monkeypatch.setattr(mcp, "_json_request", fake_request)
-    monkeypatch.setattr(mcp, "_RUNTIME_MATCHMAKING_TICKET", None)
-    monkeypatch.setattr(mcp, "_RUNTIME_API_KEY", "ed_runtime")
-
-    joined = mcp.tool_join_matchmaking({"agent_id": "alpha"})
-    assert joined["status"] == "waiting"
-    assert mcp.configured_matchmaking_ticket() == "mmt_secret"
-
-    matched = mcp.tool_matchmaking_status({})
-    assert matched["match"] == {"match_id": "M-test", "seat": 0, "token": "seat-secret"}
-    assert calls == [
-        {
-            "method": "POST",
-            "path": "/api/agent/matchmaking/join",
-            "body": {"agent_id": "alpha"},
-            "bearer": "ed_runtime",
-        },
-        {
-            "method": "POST",
-            "path": "/api/agent/matchmaking/status",
-            "body": {"ticket_secret": "mmt_secret"},
-            "bearer": "ed_runtime",
-        },
-    ]
-
-
-def test_matchmaking_rejects_invalid_card_ids_before_http(monkeypatch):
-    monkeypatch.setattr(mcp, "_RUNTIME_API_KEY", "ed_runtime")
-    with pytest.raises(mcp.ToolError, match="card_ids"):
-        mcp.tool_join_matchmaking({"card_ids": ["ok", 42]})
-
-
-def test_api_key_argument_is_rejected_even_when_tool_called_directly():
-    with pytest.raises(mcp.ToolError, match="unexpected argument"):
-        mcp.tool_get_match_state({
-            "match_id": "M",
-            "seat": 0,
-            "token": "seat-token",
-            "api_key": "credential_from_model",
-        })
-
-
-def test_content_result_redacts_structured_output():
-    result = mcp._content_result({"tokens": ["a", "b"], "token": "c"})
-
-    assert json.loads(result["content"][0]["text"]) == {
-        "token": "[redacted]",
-        "tokens": ["a", "b"],
-    }
-    assert result["structuredContent"]["token"] == "[redacted]"
-
-
-def test_http_errors_redact_env_and_request_secret_values(monkeypatch):
-    monkeypatch.setenv("EIGENDARK_BASE_URL", "https://www.eigendark.com")
-
-    def fake_urlopen(request, timeout):
-        body = b'{"message": "failed for seat-token"}'
-        raise urllib.error.HTTPError(request.full_url, 403, "Forbidden", {}, io.BytesIO(body))
-
-    monkeypatch.setattr(mcp.urllib.request, "urlopen", fake_urlopen)
-
-    with pytest.raises(mcp.ToolError) as exc:
-        mcp._json_request(
-            "GET",
-            "/api/test",
-            query={"token": "seat-token"},
-        )
-
-    message = str(exc.value)
-    assert "seat-token" not in message
-    assert "[redacted]" in message
-
-
-def test_stdio_framed_initialize_smoke():
-    message = {
-        "jsonrpc": "2.0",
-        "id": 1,
-        "method": "initialize",
-        "params": {
-            "protocolVersion": "2025-11-25",
-            "capabilities": {},
-            "clientInfo": {"name": "smoke", "version": "0"},
-        },
-    }
-    raw = json.dumps(message).encode("utf-8")
-    env = dict(os.environ)
-    # Run from the checkout even when the package isn't installed into the
-    # test interpreter.
-    src_dir = str(Path(__file__).resolve().parents[1] / "src")
-    env["PYTHONPATH"] = src_dir + os.pathsep + env.get("PYTHONPATH", "")
-    proc = subprocess.Popen(
-        [sys.executable, "-m", "eigendark_agent_mcp.server"],
-        stdin=subprocess.PIPE,
-        stdout=subprocess.PIPE,
-        stderr=subprocess.PIPE,
-        env=env,
+def test_stdio_is_newline_json_not_content_length():
+    initialize = (
+        '{"jsonrpc":"2.0","id":1,"method":"initialize","params":'
+        '{"protocolVersion":"2025-11-25","capabilities":{},'
+        '"clientInfo":{"name":"test","version":"1"}}}\n'
     )
-    assert proc.stdin is not None
-    assert proc.stdout is not None
-    proc.stdin.write(f"Content-Length: {len(raw)}\r\n\r\n".encode("ascii") + raw)
-    proc.stdin.close()
+    process = subprocess.run(
+        [sys.executable, "-m", "eigendark_agent_mcp.server"],
+        input=initialize,
+        text=True,
+        capture_output=True,
+        cwd=ROOT,
+        env={**os.environ, "PYTHONPATH": str(ROOT / "src")},
+        timeout=10,
+        check=True,
+    )
+    assert "Content-Length" not in process.stdout
+    assert '"name":"eigendark-agent-mcp"' in process.stdout
+    assert process.stderr == ""
 
-    header = proc.stdout.readline().decode("ascii")
-    proc.stdout.readline()
-    length = int(header.split(":", 1)[1].strip())
-    body = proc.stdout.read(length)
-    stderr = proc.stderr.read().decode("utf-8") if proc.stderr else ""
-    proc.wait(timeout=5)
 
-    assert stderr == ""
-    assert json.loads(body)["result"]["serverInfo"]["name"] == "eigendark-agent-mcp"
+def test_error_result_redacts_secret_patterns():
+    result = server._error_result("failed Bearer abcdefghijklmnop")
+    assert result.isError is True
+    assert "abcdefghijklmnop" not in result.content[0].text
+
+
+def test_direct_server_handlers_cover_success_and_safe_failures(monkeypatch):
+    async def scenario() -> None:
+        listed = await server.list_tools()
+        assert len(listed) == 11
+        guide = await server.call_tool("agent_protocol_guide", {})
+        assert guide["security_notice"]
+        invalid = await server.call_tool("submit_action", {"match_id": "M"})
+        assert invalid.isError is True
+        not_mapping = await server.call_tool("agent_protocol_guide", [])
+        assert not_mapping.isError is True
+
+        monkeypatch.setattr(
+            server, "invoke_tool", lambda *args: (_ for _ in ()).throw(RuntimeError("private"))
+        )
+        internal = await server.call_tool("agent_protocol_guide", {})
+        assert internal.isError is True
+        assert "private" not in internal.content[0].text
+
+        monkeypatch.setattr(
+            server, "invoke_tool", lambda *args: (_ for _ in ()).throw(ToolError("safe error"))
+        )
+        expected = await server.call_tool("agent_protocol_guide", {})
+        assert expected.isError is True
+        assert "safe error" in expected.content[0].text
+
+    anyio.run(scenario)
+
+
+def test_cancelled_tool_call_keeps_limiter_slot_until_worker_exits(monkeypatch):
+    first_started = threading.Event()
+    release_first = threading.Event()
+    second_started = threading.Event()
+
+    def blocking_invoke(name, arguments):  # noqa: ANN001, ANN202
+        if name == "first":
+            first_started.set()
+            if not release_first.wait(timeout=2):
+                raise RuntimeError("test worker timed out")
+        else:
+            second_started.set()
+        return {"security_notice": "test"}
+
+    monkeypatch.setattr(server, "invoke_tool", blocking_invoke)
+
+    async def scenario() -> None:
+        monkeypatch.setattr(server, "TOOL_LIMITER", anyio.CapacityLimiter(1))
+        first_scope = anyio.CancelScope()
+
+        async def first_call() -> None:
+            with first_scope:
+                await server.call_tool("first", {})
+
+        try:
+            async with anyio.create_task_group() as task_group:
+                task_group.start_soon(first_call)
+                assert await anyio.to_thread.run_sync(first_started.wait, 1)
+                first_scope.cancel()
+                await anyio.sleep(0)
+
+                task_group.start_soon(server.call_tool, "second", {})
+                await anyio.sleep(0.05)
+                assert not second_started.is_set()
+
+                release_first.set()
+                assert await anyio.to_thread.run_sync(second_started.wait, 1)
+        finally:
+            release_first.set()
+
+    anyio.run(scenario)
+
+
+class FakeTextStream:
+    def __init__(self, content: bytes = b""):
+        self.buffer = io.BytesIO(content)
+
+
+def test_bounded_transport_reads_and_writes_newline_json(monkeypatch):
+    request = b'{"jsonrpc":"2.0","id":1,"method":"tools/list","params":{}}\n'
+    fake_stdin = FakeTextStream(request)
+    fake_stdout = FakeTextStream()
+    monkeypatch.setattr(server.sys, "stdin", fake_stdin)
+    monkeypatch.setattr(server.sys, "stdout", fake_stdout)
+
+    async def scenario() -> None:
+        async with server.bounded_stdio_server() as (read_stream, write_stream):
+            incoming = await read_stream.receive()
+            assert incoming.message.root.method == "tools/list"
+            await write_stream.send(
+                server.SessionMessage(
+                    types.JSONRPCMessage(
+                        root=types.JSONRPCResponse(jsonrpc="2.0", id=1, result={"ok": True})
+                    )
+                )
+            )
+            await write_stream.aclose()
+
+    anyio.run(scenario)
+    assert fake_stdout.buffer.getvalue() == b'{"jsonrpc":"2.0","id":1,"result":{"ok":true}}\n'
+
+
+def test_bounded_reader_drains_oversized_line_and_handles_eof(monkeypatch):
+    monkeypatch.setattr(server, "MAX_STDIO_MESSAGE_BYTES", 8)
+    fake_stdin = FakeTextStream(b"0123456789abcdef\nnext\n")
+    monkeypatch.setattr(server.sys, "stdin", fake_stdin)
+    assert server._read_stdin_line() is server.OVERSIZED_MESSAGE
+    assert server._read_stdin_line() == b"next\n"
+    assert server._read_stdin_line() is None
+
+
+def test_bounded_output_replaces_oversized_response(monkeypatch):
+    response = types.JSONRPCMessage(
+        root=types.JSONRPCResponse(jsonrpc="2.0", id=7, result={"value": "x" * 200})
+    )
+    monkeypatch.setattr(server, "MAX_STDIO_MESSAGE_BYTES", 100)
+    payload = server._bounded_output(server.SessionMessage(response))
+    assert b"Response exceeded the safe size limit" in payload
+    assert b'"id":7' in payload
+
+    notification = types.JSONRPCMessage(
+        root=types.JSONRPCNotification(
+            jsonrpc="2.0", method="notifications/test", params={"value": "x" * 200}
+        )
+    )
+    assert server._bounded_output(server.SessionMessage(notification)) == b""
+
+
+def test_main_has_sanitized_exit_paths(monkeypatch):
+    monkeypatch.setattr(server.anyio, "run", lambda function: None)
+    assert server.main() == 0
+
+    monkeypatch.setattr(
+        server.anyio, "run", lambda function: (_ for _ in ()).throw(KeyboardInterrupt())
+    )
+    assert server.main() == 0
+
+    stderr = io.StringIO()
+    monkeypatch.setattr(server.sys, "stderr", stderr)
+    monkeypatch.setattr(
+        server.anyio, "run", lambda function: (_ for _ in ()).throw(RuntimeError("secret detail"))
+    )
+    assert server.main() == 1
+    assert "secret detail" not in stderr.getvalue()

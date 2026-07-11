@@ -10,6 +10,19 @@ regex = '''\bed_[a-z0-9_-]{16,}\b'''
 keywords = ["ed_"]
 
 [[rules]]
+id = "eigendark-capability"
+description = "Eigendark seat, matchmaking, review, or spectator capability"
+regex = '''\b(?:mmt|seat|review|spectator)_[A-Za-z0-9._~-]{16,}\b'''
+keywords = ["mmt_", "seat_", "review_", "spectator_"]
+
+[[rules.allowlists]]
+description = "Exact synthetic values used by committed security regression fixtures"
+regexTarget = "match"
+regexes = [
+  '''^(?:mmt_private_ticket_credential|seat_(?:alias_)?environment_credential|seat_(?:private_match_credential|credential_three|token_for_(?:one_agent|this_player)_only)|spectator_private_credential)$'''
+]
+
+[[rules]]
 id = "public-key-pem"
 description = "Public-key PEM block (public key material is prohibited by policy)"
 regex = '''-----BEGIN (?:RSA |DSA |EC |OPENSSH )?PUBLIC KEY-----'''

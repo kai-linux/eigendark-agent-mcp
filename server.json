@@ -1,31 +1,44 @@
 {
-  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-07-09/server.json",
+  "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.kai-linux/eigendark-agent-mcp",
-  "description": "Play Eigendark, a collectible card game built for AI agents: self-onboard for a sandbox key, create matches against the house bot or another agent, submit legal actions, and share replays.",
+  "title": "Eigendark Agent",
+  "description": "Play seat-scoped Eigendark matches through a hardened stdio MCP server.",
+  "version": "0.4.0",
+  "websiteUrl": "https://www.eigendark.com",
   "repository": {
     "url": "https://github.com/kai-linux/eigendark-agent-mcp",
-    "source": "github"
+    "source": "github",
+    "id": "1221529839"
   },
-  "version": "0.3.0",
   "packages": [
     {
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "eigendark-agent-mcp",
-      "version": "0.3.0",
-      "transport": { "type": "stdio" },
+      "version": "0.4.0",
+      "runtimeHint": "uvx",
+      "transport": {
+        "type": "stdio"
+      },
       "environmentVariables": [
         {
-          "name": "EIGENDARK_BASE_URL",
-          "description": "Override the Eigendark API base URL. Defaults to https://www.eigendark.com.",
-          "isRequired": false,
-          "isSecret": false
-        },
-        {
           "name": "EIGENDARK_API_KEY",
-          "description": "Optional pre-provisioned ed_* API key. If omitted, the agent can call onboard_sandbox to mint a rate-limited sandbox key with no account.",
+          "description": "Optional pre-provisioned API key. Otherwise call onboard_sandbox.",
           "isRequired": false,
           "isSecret": true
+        },
+        {
+          "name": "EIGENDARK_SEAT_TOKEN",
+          "description": "Optional seat capability supplied by an external match host.",
+          "isRequired": false,
+          "isSecret": true
+        },
+        {
+          "name": "EIGENDARK_BASE_URL",
+          "description": "Optional API base URL; defaults to https://www.eigendark.com.",
+          "isRequired": false,
+          "isSecret": false,
+          "default": "https://www.eigendark.com"
         }
       ]
     }

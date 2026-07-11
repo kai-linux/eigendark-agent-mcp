@@ -1,0 +1,89 @@
+[build-system]
+requires = ["setuptools==80.9.0"]
+build-backend = "setuptools.build_meta"
+
+[project]
+name = "eigendark-agent-mcp"
+version = "0.4.0"
+description = "A security-focused stdio MCP server for playing Eigendark matches."
+readme = "README.md"
+requires-python = ">=3.11"
+license = "MIT"
+authors = [{ name = "Eigendark" }]
+keywords = ["eigendark", "mcp", "model-context-protocol", "game", "agents"]
+classifiers = [
+  "Development Status :: 4 - Beta",
+  "Environment :: Console",
+  "Intended Audience :: Developers",
+  "Programming Language :: Python :: 3",
+  "Programming Language :: Python :: 3 :: Only",
+  "Programming Language :: Python :: 3.11",
+  "Programming Language :: Python :: 3.12",
+  "Programming Language :: Python :: 3.13",
+  "Programming Language :: Python :: 3.14",
+  "Topic :: Games/Entertainment",
+  "Typing :: Typed",
+]
+dependencies = ["mcp==1.28.1"]
+
+[project.optional-dependencies]
+dev = [
+  "bandit[toml]>=1.9.3,<2",
+  "build>=1.3.0,<2",
+  "check-jsonschema>=0.36.1,<1",
+  "pip-audit>=2.10.0,<3",
+  "pypi-attestations==0.0.29",
+  "pytest>=9.0.0,<10",
+  "pytest-cov>=7.0.0,<8",
+  "ruff>=0.14.0,<1",
+  "setuptools==80.9.0",
+  "twine>=6.2.0,<7",
+  "wheel>=0.46.0,<1",
+]
+
+[project.scripts]
+eigendark-agent-mcp = "eigendark_agent_mcp.server:main"
+
+[project.urls]
+Homepage = "https://www.eigendark.com"
+Repository = "https://github.com/kai-linux/eigendark-agent-mcp"
+Security = "https://github.com/kai-linux/eigendark-agent-mcp/security/policy"
+Issues = "https://github.com/kai-linux/eigendark-agent-mcp/issues"
+
+[tool.setuptools]
+package-dir = { "" = "src" }
+
+[tool.setuptools.packages.find]
+where = ["src"]
+
+[tool.setuptools.package-data]
+eigendark_agent_mcp = ["py.typed"]
+
+[tool.pytest.ini_options]
+testpaths = ["tests"]
+addopts = ["-ra", "-q", "--strict-config", "--strict-markers"]
+
+[tool.coverage.run]
+branch = true
+source = ["eigendark_agent_mcp"]
+
+[tool.coverage.report]
+fail_under = 90
+show_missing = true
+skip_covered = true
+exclude_also = [
+  "if TYPE_CHECKING:",
+  "if __name__ == .__main__.:",
+]
+
+[tool.ruff]
+target-version = "py311"
+line-length = 100
+src = ["src", "tests", "scripts"]
+
+[tool.ruff.lint]
+select = ["E", "F", "I", "UP", "B", "C4", "DTZ", "PIE", "PT", "RET", "RSE", "SIM"]
+
+[tool.bandit]
+exclude_dirs = ["tests"]
+skips = []
