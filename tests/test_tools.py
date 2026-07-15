@@ -19,12 +19,14 @@ def no_secrets(value: object, *secrets: str) -> None:
 
 
 def test_tool_schemas_are_valid_and_have_no_credential_inputs():
-    assert len(tools.TOOL_DEFINITIONS) == len(tools.TOOLS) == 11
+    assert len(tools.TOOL_DEFINITIONS) == 11
+    assert len(tools.PUBLIC_TOOL_DEFINITIONS) == 3
+    assert len(tools.TOOLS) == 14
     forbidden = {"api_key", "token", "seat_token", "ticket_secret", "review_key"}
-    for definition in tools.TOOL_DEFINITIONS:
+    for definition in (*tools.TOOL_DEFINITIONS, *tools.PUBLIC_TOOL_DEFINITIONS):
         Draft202012Validator.check_schema(definition.input_schema)
         assert forbidden.isdisjoint(definition.input_schema.get("properties", {}))
-        mcp_tool = definition.as_mcp_tool()
+        mcp_tool = definition.as_mcp_tool(noauth=definition in tools.PUBLIC_TOOL_DEFINITIONS)
         assert mcp_tool.outputSchema == tools.OUTPUT_BASE
         assert UNTRUSTED_DATA_NOTICE in definition.description or definition.name in {
             "onboard_sandbox",
@@ -33,6 +35,63 @@ def test_tool_schemas_are_valid_and_have_no_credential_inputs():
         }
     assert tools.TOOLS["agent_protocol_guide"].as_mcp_tool().annotations.openWorldHint is False
     assert tools.TOOLS["summarize_state"].as_mcp_tool().annotations.openWorldHint is False
+
+    for definition in tools.PUBLIC_TOOL_DEFINITIONS:
+        dumped = definition.as_mcp_tool(noauth=True).model_dump(by_alias=True)
+        assert dumped["securitySchemes"] == [{"type": "noauth"}]
+        assert dumped["_meta"]["securitySchemes"] == [{"type": "noauth"}]
+
+
+def test_cold_play_onboards_creates_match_and_returns_live_link(monkeypatch: pytest.MonkeyPatch):
+    api_key = "api_cold_private_credential"
+    seat_token = "seat_private_match_credential"
+    spectator_token = "spectator_private_credential"
+    calls: list[tuple[str, str, object, object]] = []
+
+    def fake_request(method, path, *, body=None, bearer=None):
+        calls.append((method, path, body, bearer))
+        if path.endswith("/challenge"):
+            return {
+                "challenge_id": "cold-challenge",
+                "reception_protocol": {"zone_from": 6, "cost": 1},
+                "proof_of_work": {"algorithm": "sha256", "difficulty": 1},
+            }
+        if path == "/api/agent/onboard":
+            return {"api_key": api_key, "tier": "sandbox", "limits": {"rate_per_min": 6}}
+        if path.endswith("/create-bot"):
+            assert bearer == api_key
+            assert str(body["agent_id"]).startswith("chatgpt-")
+            return {
+                "match_id": "M-cold",
+                "seat": 0,
+                "token": seat_token,
+                "spectator_token": spectator_token,
+                "spectator": {
+                    "human_url": ("https://www.eigendark.com/play?agent_match=M-cold&share=sh_cold")
+                },
+            }
+        assert path.endswith("/M-cold/state")
+        assert body == {"seat": 0, "token": seat_token, "advance_bot": False, "since_seq": 0}
+        return {
+            "match_id": "M-cold",
+            "match_status": "active",
+            "legal_actions": [{"kind": "pass", "args": {}}],
+            "token": seat_token,
+        }
+
+    monkeypatch.setattr(tools, "json_request", fake_request)
+    result = tools.invoke_tool("play_eigendark", {})
+
+    assert result["match_id"] == "M-cold"
+    assert result["human_url"].endswith("agent_match=M-cold&share=sh_cold")
+    assert result["legal_actions"] == [{"kind": "pass", "args": {}}]
+    no_secrets(result, api_key, seat_token, spectator_token)
+    assert [path for _, path, _, _ in calls] == [
+        "/api/agent/onboard/challenge",
+        "/api/agent/onboard",
+        "/api/agent/match/create-bot",
+        "/api/agent/match/M-cold/state",
+    ]
 
 
 @pytest.mark.parametrize(

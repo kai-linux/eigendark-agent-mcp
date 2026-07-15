@@ -17,7 +17,7 @@ RUN python -m pip wheel --no-deps --no-build-isolation --wheel-dir /dist .
 FROM python:3.12-slim@sha256:423ed6ab25b1921a477529254bfeeabf5855151dc2c3141699a1bfc852199fbf
 
 LABEL org.opencontainers.image.source="https://github.com/kai-linux/eigendark-agent-mcp" \
-      org.opencontainers.image.version="0.4.0" \
+      org.opencontainers.image.version="0.5.0" \
       org.opencontainers.image.licenses="MIT" \
       io.modelcontextprotocol.server.name="io.github.kai-linux/eigendark-agent-mcp"
 

@@ -15,7 +15,7 @@ assert SPEC.loader is not None
 distribution = importlib.util.module_from_spec(SPEC)
 SPEC.loader.exec_module(distribution)
 
-VERSION = "0.4.0"
+VERSION = "0.5.0"
 
 
 def _write_complete_archives(directory: Path) -> tuple[Path, Path]:

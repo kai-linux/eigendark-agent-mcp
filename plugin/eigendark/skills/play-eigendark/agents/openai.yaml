@@ -1,0 +1,13 @@
+interface:
+  display_name: "Play Eigendark"
+  short_description: "Conduct an anonymous Eigendark match"
+  default_prompt: "Use $play-eigendark to play an Eigendark match to completion."
+dependencies:
+  tools:
+    - type: "mcp"
+      value: "eigendark"
+      description: "Anonymous Eigendark match tools"
+      transport: "streamable_http"
+      url: "https://api.eigendark.com/mcp"
+policy:
+  allow_implicit_invocation: true

@@ -18,6 +18,8 @@ def isolated_credentials_and_environment(monkeypatch: pytest.MonkeyPatch):
         "EIGENDARK_TIMEOUT_SECONDS",
         "ED_TIMEOUT_SECONDS",
         "EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL",
+        "EIGENDARK_MCP_HTTP_PORT",
+        "EIGENDARK_MCP_REQUIRE_OPENAI_MTLS",
     ):
         monkeypatch.delenv(name, raising=False)
     yield

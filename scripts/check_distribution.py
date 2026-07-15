@@ -44,7 +44,13 @@ SDIST_REQUIRED = frozenset(
         "scripts/check_workflows.py",
         "server.json",
         "src/eigendark_agent_mcp/py.typed",
+        "src/eigendark_agent_mcp/http_server.py",
         "src/eigendark_agent_mcp/server.py",
+        "deploy/install-production.sh",
+        "plugin/eigendark/.codex-plugin/plugin.json",
+        "plugin/eigendark/.mcp.json",
+        "plugin/eigendark/skills/play-eigendark/SKILL.md",
+        "plugin/eigendark/skills/play-eigendark/agents/openai.yaml",
         "tests/conftest.py",
         "tests/test_release_metadata.py",
     }
@@ -52,6 +58,7 @@ SDIST_REQUIRED = frozenset(
 WHEEL_REQUIRED = frozenset(
     {
         "eigendark_agent_mcp/py.typed",
+        "eigendark_agent_mcp/http_server.py",
         "eigendark_agent_mcp/server.py",
         "eigendark_agent_mcp/tools.py",
     }

@@ -2,20 +2,21 @@
 
 <!-- mcp-name: io.github.kai-linux/eigendark-agent-mcp -->
 
-`eigendark-agent-mcp` is a hardened stdio MCP server that lets an AI agent play
+`eigendark-agent-mcp` is a hardened stdio and hosted MCP server that lets an AI agent play
 [Eigendark](https://www.eigendark.com) through the public, seat-scoped Agent API.
 
 The server can self-onboard a short-lived sandbox identity, create a house-bot
 match or enter public matchmaking, read a seat-redacted state, submit one legal
-action, and create a read-only replay link.
+action, and create a read-only replay link. Its public ChatGPT app starts cold:
+the user can say “play Eigendark” without an Eigendark account, key, invite, or setup.
 
 ## Security model
 
 API keys, matchmaking tickets, seat tokens, review keys, and spectator tokens
-are never MCP tool arguments or results. They enter the process only through
-environment configuration or trusted Eigendark responses, remain in a bounded
-in-memory store, and are applied to requests internally. Restarting the process
-clears all credentials minted or received during that session.
+are never MCP tool arguments or results. In stdio mode they enter the process only
+through environment configuration or trusted Eigendark responses. The hosted mode
+refuses process-wide credentials and allocates a distinct bounded in-memory store
+for each MCP session. Restarting the process clears all credentials.
 
 Remote card text, event text, player names, and deck names are untrusted data.
 Every remote result is labeled accordingly, recursively sanitized, bounded, and
@@ -41,13 +42,13 @@ Python 3.11 or newer is required. Run the published package without installing i
 globally:
 
 ```bash
-uvx --from eigendark-agent-mcp==0.4.0 eigendark-agent-mcp
+uvx --from eigendark-agent-mcp==0.5.0 eigendark-agent-mcp
 ```
 
 Or install the exact release with `pipx`:
 
 ```bash
-pipx install eigendark-agent-mcp==0.4.0
+pipx install eigendark-agent-mcp==0.5.0
 ```
 
 For development from a checkout, follow [CONTRIBUTING.md](CONTRIBUTING.md).
@@ -63,7 +64,7 @@ Self-onboarding needs no secret configuration:
       "command": "uvx",
       "args": [
         "--from",
-        "eigendark-agent-mcp==0.4.0",
+        "eigendark-agent-mcp==0.5.0",
         "eigendark-agent-mcp"
       ]
     }
@@ -82,7 +83,7 @@ this one agent needs:
       "command": "uvx",
       "args": [
         "--from",
-        "eigendark-agent-mcp==0.4.0",
+        "eigendark-agent-mcp==0.5.0",
         "eigendark-agent-mcp"
       ],
       "env": {
@@ -96,6 +97,22 @@ this one agent needs:
 
 Do not place real credentials in committed configuration, prompts, transcripts,
 issues, logs, screenshots, or shared agent context.
+
+## ChatGPT app
+
+The public app uses Streamable HTTP at `https://api.eigendark.com/mcp`. It exposes
+only three no-auth tools: `play_eigendark`, `get_eigendark_game`, and
+`take_eigendark_turn`. `play_eigendark` performs anonymous sandbox onboarding,
+creates a bot match, retains all capabilities only in that MCP session, and returns
+the initial state plus a public read-only live/replay URL. ChatGPT then chooses only
+from server-issued legal actions until the match completes.
+
+The hosted process binds to loopback. Production nginx verifies ChatGPT's mTLS
+client certificate and overwrites the forwarded certificate headers; the Python
+service independently checks the expected SAN, client-auth usage, and validity.
+Requests, sessions, bodies, workers, and memory are bounded. The installable plugin
+source and deployment configuration live in [`plugin/eigendark`](plugin/eigendark)
+and [`deploy`](deploy).
 
 ## Play flow
 

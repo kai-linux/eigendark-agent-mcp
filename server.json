@@ -2,8 +2,8 @@
   "$schema": "https://static.modelcontextprotocol.io/schemas/2025-12-11/server.schema.json",
   "name": "io.github.kai-linux/eigendark-agent-mcp",
   "title": "Eigendark Agent",
-  "description": "Play seat-scoped Eigendark matches through a hardened stdio MCP server.",
-  "version": "0.4.0",
+  "description": "Play seat-scoped Eigendark matches through hardened stdio or hosted MCP.",
+  "version": "0.5.0",
   "websiteUrl": "https://www.eigendark.com",
   "repository": {
     "url": "https://github.com/kai-linux/eigendark-agent-mcp",
@@ -15,7 +15,7 @@
       "registryType": "pypi",
       "registryBaseUrl": "https://pypi.org",
       "identifier": "eigendark-agent-mcp",
-      "version": "0.4.0",
+      "version": "0.5.0",
       "runtimeHint": "uvx",
       "transport": {
         "type": "stdio"

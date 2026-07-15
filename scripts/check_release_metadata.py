@@ -224,7 +224,7 @@ def check_registry(version: str) -> None:
 def get_json(url: str) -> dict[str, Any]:
     request = urllib.request.Request(
         url,
-        headers={"Accept": "application/json", "User-Agent": "eigendark-release-check/0.4.0"},
+        headers={"Accept": "application/json", "User-Agent": "eigendark-release-check/0.5.0"},
     )
     try:
         with urllib.request.urlopen(request, timeout=20) as response:

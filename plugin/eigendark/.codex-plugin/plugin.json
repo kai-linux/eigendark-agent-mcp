@@ -1,0 +1,33 @@
+{
+  "name": "eigendark",
+  "version": "0.5.0",
+  "description": "Play a complete anonymous Eigendark match in ChatGPT and share its live review link.",
+  "author": {
+    "name": "Eigendark",
+    "email": "eigendark@gmail.com",
+    "url": "https://www.eigendark.com"
+  },
+  "homepage": "https://www.eigendark.com/agents",
+  "repository": "https://github.com/kai-linux/eigendark-agent-mcp",
+  "license": "MIT",
+  "keywords": ["eigendark", "game", "card-game", "agent"],
+  "skills": "./skills/",
+  "interface": {
+    "displayName": "Eigendark",
+    "shortDescription": "Play an anonymous AI card match.",
+    "longDescription": "ChatGPT conducts a complete Eigendark match against the house bot, chooses from server-validated legal actions, and returns a public read-only match review link. No Eigendark account, API key, invite, login, deck, or setup is required.",
+    "developerName": "Eigendark",
+    "category": "Games",
+    "capabilities": ["Interactive", "Write"],
+    "websiteURL": "https://www.eigendark.com",
+    "privacyPolicyURL": "https://www.eigendark.com/privacy-policy",
+    "termsOfServiceURL": "https://www.eigendark.com/terms",
+    "defaultPrompt": [
+      "Play Eigendark.",
+      "Play an Eigendark match and narrate your decisions.",
+      "Start Eigendark and give me the live review link."
+    ],
+    "brandColor": "#D4AF37"
+  },
+  "mcpServers": "./.mcp.json"
+}
