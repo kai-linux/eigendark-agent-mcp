@@ -15,16 +15,17 @@ def test_production_install_bootstraps_locked_build_backend_before_local_package
     assert script.count("--require-hashes") == 2
 
 
-def test_systemd_uses_moved_venv_safely_without_exposing_home_credentials() -> None:
+def test_systemd_runtime_cannot_read_home_credentials() -> None:
     unit = (ROOT / "deploy/eigendark-agent-mcp.service").read_text(encoding="utf-8")
     installer = (ROOT / "deploy/install-production.sh").read_text(encoding="utf-8")
 
-    assert "ProtectHome=tmpfs" in unit
+    assert "ProtectHome=true" in unit
     assert "WorkingDirectory=/\n" in unit
     assert "WorkingDirectory=/home" not in unit
-    assert "BindReadOnlyPaths=/home/bitnami/eigendark-agent-mcp " in unit
-    assert "/home/bitnami/eigendark/.runtime-python" in unit
-    assert "/home/bitnami/eigendark/runtime\n" not in unit
-    assert "ExecStart=/home/bitnami/eigendark-agent-mcp/.venv/bin/python -m " in unit
+    assert "BindReadOnlyPaths=" not in unit
+    assert "ExecStart=/opt/eigendark-agent-mcp/.venv/bin/python -m " in unit
     assert ".venv/bin/eigendark-agent-mcp-http" not in unit
-    assert "systemctl restart eigendark-agent-mcp.service" in installer
+    assert "RUNTIME=/opt/eigendark-agent-mcp" in installer
+    assert "PYTHON_INSTALL_ROOT=/opt/eigendark-python" in installer
+    assert "systemctl start eigendark-agent-mcp.service" in installer
+    assert "RUNTIME_PREVIOUS" in installer
