@@ -13,6 +13,8 @@ rm -rf .venv.next
 .venv.next/bin/python -m pip install --disable-pip-version-check \
     --only-binary=:all: --require-hashes -r requirements-runtime.lock
 .venv.next/bin/python -m pip install --disable-pip-version-check \
+    --only-binary=:all: --require-hashes -r requirements-build.lock
+.venv.next/bin/python -m pip install --disable-pip-version-check \
     --no-deps --no-build-isolation .
 
 rm -rf .venv.previous
