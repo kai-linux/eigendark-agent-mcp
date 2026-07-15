@@ -391,7 +391,10 @@ def tool_play_eigendark(args: Mapping[str, Any]) -> dict[str, Any]:
             "match_id": created["match_id"],
             "seat": created["seat"],
             "since_seq": 0,
-            "advance_bot": False,
+            # The bot may win opening initiative. Advance it here so a cold
+            # client always receives either a legal move or a terminal game,
+            # rather than an inert opponent-turn snapshot.
+            "advance_bot": True,
         }
     )
     return {**state, **created}
