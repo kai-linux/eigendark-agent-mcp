@@ -8,7 +8,11 @@ from __future__ import annotations
 
 import os
 import threading
+import weakref
 from collections import OrderedDict
+from collections.abc import Iterator
+from contextlib import contextmanager
+from contextvars import ContextVar
 from dataclasses import dataclass
 
 from .config import env_value
@@ -178,3 +182,51 @@ def _seat(value: object) -> int:
 
 
 CREDENTIALS = CredentialStore()
+
+_ACTIVE_CREDENTIALS: ContextVar[CredentialStore] = ContextVar(
+    "eigendark_active_credentials",
+    default=CREDENTIALS,
+)
+
+
+def credentials() -> CredentialStore:
+    """Return the credential store isolated to the current MCP session."""
+
+    return _ACTIVE_CREDENTIALS.get()
+
+
+@contextmanager
+def credential_scope(store: CredentialStore) -> Iterator[None]:
+    """Bind one credential store to this async/task/thread context."""
+
+    token = _ACTIVE_CREDENTIALS.set(store)
+    try:
+        yield
+    finally:
+        _ACTIVE_CREDENTIALS.reset(token)
+
+
+class SessionCredentialRegistry:
+    """Allocate one bounded credential store per live MCP protocol session.
+
+    Session objects are held weakly so an expired HTTP transport cannot leave
+    credentials reachable after the SDK releases its session.
+    """
+
+    def __init__(self) -> None:
+        self._lock = threading.RLock()
+        self._stores: weakref.WeakKeyDictionary[object, CredentialStore] = (
+            weakref.WeakKeyDictionary()
+        )
+
+    def for_session(self, session: object) -> CredentialStore:
+        with self._lock:
+            store = self._stores.get(session)
+            if store is None:
+                store = CredentialStore()
+                self._stores[session] = store
+            return store
+
+    def active_count(self) -> int:
+        with self._lock:
+            return len(self._stores)

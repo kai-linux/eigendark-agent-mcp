@@ -9,7 +9,7 @@ from collections.abc import Mapping, Sequence
 from typing import Any
 
 from .errors import ToolError
-from .runtime import CREDENTIALS
+from .runtime import credentials
 
 REDACTED = "[redacted]"
 MAX_SANITIZE_DEPTH = 16
@@ -67,7 +67,7 @@ def is_secret_field(key: object) -> bool:
 
 def redact_text(value: str, extra_sensitive: Sequence[object] = ()) -> str:
     text = _CONTROL_RE.sub("�", value)
-    sensitive = [*CREDENTIALS.sensitive_values()]
+    sensitive = [*credentials().sensitive_values()]
     sensitive.extend(str(item) for item in extra_sensitive if isinstance(item, str) and item)
     # Replace longer values first so a prefix cannot expose a suffix.
     for secret in sorted(set(sensitive), key=len, reverse=True):
@@ -138,7 +138,7 @@ def ensure_no_secret(value: Any, label: str) -> None:
                 collect(child, depth + 1)
 
     collect(value)
-    known = CREDENTIALS.sensitive_values()
+    known = credentials().sensitive_values()
     for text in strings:
         decoded = urllib.parse.unquote_plus(text)
         if _BEARER_RE.search(text) or _EIGENDARK_CREDENTIAL_RE.search(text):

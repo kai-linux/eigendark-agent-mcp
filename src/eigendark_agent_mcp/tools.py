@@ -4,6 +4,7 @@ from __future__ import annotations
 
 import hashlib
 import logging
+import secrets
 import threading
 import urllib.parse
 from collections.abc import Callable, Mapping
@@ -16,7 +17,7 @@ from mcp import types
 from .config import PRODUCTION_HOSTS, validated_base_url
 from .errors import ToolError
 from .http_client import json_request
-from .runtime import CREDENTIALS
+from .runtime import credentials
 from .security import (
     UNTRUSTED_DATA_NOTICE,
     ensure_no_secret,
@@ -225,7 +226,15 @@ class ToolDefinition:
     idempotent: bool = False
     open_world: bool = True
 
-    def as_mcp_tool(self) -> types.Tool:
+    def as_mcp_tool(self, *, noauth: bool = False) -> types.Tool:
+        security_schemes = [{"type": "noauth"}] if noauth else None
+        metadata: dict[str, Any] | None = None
+        if security_schemes:
+            metadata = {
+                "securitySchemes": security_schemes,
+                "openai/toolInvocation/invoking": f"Running {self.title.lower()}…"[:64],
+                "openai/toolInvocation/invoked": f"Finished {self.title.lower()}."[:64],
+            }
         return types.Tool(
             name=self.name,
             title=self.title,
@@ -239,6 +248,8 @@ class ToolDefinition:
                 idempotentHint=self.idempotent,
                 openWorldHint=self.open_world,
             ),
+            securitySchemes=security_schemes,
+            _meta=metadata,
         )
 
 
@@ -321,7 +332,7 @@ def _onboard_sandbox(args: Mapping[str, Any]) -> dict[str, Any]:
         body["name"] = name
     minted = json_request("POST", "/api/agent/onboard", body=body)
     api_key = _required_service_string(minted, "api_key", max_length=4096)
-    CREDENTIALS.remember_api_key(api_key)
+    credentials().remember_api_key(api_key)
     limits = minted.get("limits") if isinstance(minted.get("limits"), Mapping) else {}
     safe_limits = {
         key: limits.get(key)
@@ -351,7 +362,7 @@ def tool_create_bot_match(args: Mapping[str, Any]) -> dict[str, Any]:
         "POST",
         "/api/agent/match/create-bot",
         body=body,
-        bearer=CREDENTIALS.require_api_key(),
+        bearer=credentials().require_api_key(),
     )
     delivery = _remember_match_delivery(created)
     return public_result(
@@ -368,6 +379,37 @@ def tool_create_bot_match(args: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+def tool_play_eigendark(args: Mapping[str, Any]) -> dict[str, Any]:
+    """Cold-start an anonymous match without exposing onboarding to the model."""
+
+    store = credentials()
+    if store.api_key() is None:
+        tool_onboard_sandbox({"name": "ChatGPT"})
+    created = tool_create_bot_match({"agent_id": f"chatgpt-{secrets.token_hex(4)}"})
+    state = tool_get_match_state(
+        {
+            "match_id": created["match_id"],
+            "seat": created["seat"],
+            "since_seq": 0,
+            "advance_bot": False,
+        }
+    )
+    return {**state, **created}
+
+
+def tool_get_eigendark_game(args: Mapping[str, Any]) -> dict[str, Any]:
+    """Read match state without advancing either seat."""
+
+    return tool_get_match_state(
+        {
+            "match_id": args["match_id"],
+            "seat": args["seat"],
+            "since_seq": args.get("since_seq", 0),
+            "advance_bot": False,
+        }
+    )
+
+
 def tool_join_matchmaking(args: Mapping[str, Any]) -> dict[str, Any]:
     body = dict(args)
     ensure_no_secret(body, "matchmaking fields")
@@ -375,7 +417,7 @@ def tool_join_matchmaking(args: Mapping[str, Any]) -> dict[str, Any]:
         "POST",
         "/api/agent/matchmaking/join",
         body=body,
-        bearer=CREDENTIALS.require_api_key(),
+        bearer=credentials().require_api_key(),
     )
     return _matchmaking_result(queued, require_ticket_when_waiting=True)
 
@@ -384,8 +426,8 @@ def tool_matchmaking_status(args: Mapping[str, Any]) -> dict[str, Any]:
     status = json_request(
         "POST",
         "/api/agent/matchmaking/status",
-        body={"ticket_secret": CREDENTIALS.require_ticket()},
-        bearer=CREDENTIALS.require_api_key(),
+        body={"ticket_secret": credentials().require_ticket()},
+        bearer=credentials().require_api_key(),
     )
     return _matchmaking_result(status, require_ticket_when_waiting=False)
 
@@ -394,10 +436,10 @@ def tool_leave_matchmaking(args: Mapping[str, Any]) -> dict[str, Any]:
     result = json_request(
         "POST",
         "/api/agent/matchmaking/leave",
-        body={"ticket_secret": CREDENTIALS.require_ticket()},
-        bearer=CREDENTIALS.require_api_key(),
+        body={"ticket_secret": credentials().require_ticket()},
+        bearer=credentials().require_api_key(),
     )
-    CREDENTIALS.clear_ticket()
+    credentials().clear_ticket()
     status = _optional_service_string(result.get("status"), 32) or "cancelled"
     return public_result({"status": status})
 
@@ -408,7 +450,7 @@ def tool_get_match_state(args: Mapping[str, Any]) -> dict[str, Any]:
     ensure_no_secret(match_id, "match_id")
     body: dict[str, Any] = {
         "seat": seat,
-        "token": CREDENTIALS.seat_token(match_id, seat),
+        "token": credentials().seat_token(match_id, seat),
         "advance_bot": args.get("advance_bot", True),
     }
     if "since_seq" in args:
@@ -425,7 +467,7 @@ def tool_submit_action(args: Mapping[str, Any]) -> dict[str, Any]:
     ensure_no_secret(action_args, "action args")
     body: dict[str, Any] = {
         "seat": seat,
-        "token": CREDENTIALS.seat_token(match_id, seat),
+        "token": credentials().seat_token(match_id, seat),
         "kind": args["kind"],
         "args": action_args,
         "pace_bot": args.get("pace_bot", True),
@@ -471,7 +513,7 @@ def tool_share_replay(args: Mapping[str, Any]) -> dict[str, Any]:
     match_id = args["match_id"]
     seat = args["seat"]
     ensure_no_secret(match_id, "match_id")
-    body: dict[str, Any] = {"token": CREDENTIALS.spectator_token(match_id, seat)}
+    body: dict[str, Any] = {"token": credentials().spectator_token(match_id, seat)}
     if "ttl_minutes" in args:
         body["ttl_minutes"] = args["ttl_minutes"]
     share = json_request("POST", _match_path(match_id, "share"), body=body)
@@ -540,7 +582,7 @@ def _matchmaking_result(
         raise ToolError("The matchmaking service returned an unknown status")
     ticket = payload.get("ticket_secret")
     if isinstance(ticket, str) and ticket:
-        CREDENTIALS.remember_ticket(ticket)
+        credentials().remember_ticket(ticket)
     elif require_ticket_when_waiting and status in {"waiting", "provisioning"}:
         raise ToolError("The matchmaking service did not return a private ticket")
 
@@ -555,9 +597,9 @@ def _matchmaking_result(
             raise ToolError("The matchmaking service did not return match credentials")
         result["match"] = _remember_match_delivery(match)
         result["human_url"] = _spectator_url(match)
-        CREDENTIALS.clear_ticket()
+        credentials().clear_ticket()
     elif status in {"cancelled", "failed"}:
-        CREDENTIALS.clear_ticket()
+        credentials().clear_ticket()
     else:
         result["next"] = "Call matchmaking_status after poll_after_ms."
     return public_result(result)
@@ -572,7 +614,7 @@ def _remember_match_delivery(payload: Mapping[str, Any]) -> dict[str, Any]:
     spectator = payload.get("spectator_token") or payload.get("review_key")
     if spectator is not None and not isinstance(spectator, str):
         raise ToolError("The Eigendark service returned an invalid spectator credential")
-    CREDENTIALS.remember_match(match_id, seat, token, spectator)
+    credentials().remember_match(match_id, seat, token, spectator)
     return {"match_id": match_id, "seat": seat, "credential_source": "session_memory"}
 
 
@@ -818,9 +860,55 @@ TOOL_DEFINITIONS = (
     ),
 )
 
-TOOLS = {definition.name: definition for definition in TOOL_DEFINITIONS}
+PUBLIC_TOOL_DEFINITIONS = (
+    ToolDefinition(
+        "play_eigendark",
+        "Play Eigendark",
+        "Start an anonymous Eigendark game against the house bot when the user asks to "
+        "play Eigendark. This creates a publicly viewable match and returns its live, "
+        "read-only review link. No account, key, invite, or setup is needed. "
+        + UNTRUSTED_DATA_NOTICE,
+        _object_schema({}),
+        tool_play_eigendark,
+        destructive=False,
+        open_world=True,
+    ),
+    ToolDefinition(
+        "get_eigendark_game",
+        "Get Eigendark game",
+        "Read the current seat-redacted Eigendark game without advancing it. Use this only to "
+        "recover or refresh a game already started in this conversation. " + UNTRUSTED_DATA_NOTICE,
+        _object_schema(
+            {
+                "match_id": STRING_ID,
+                "seat": {"type": "integer", "enum": [0, 1]},
+                "since_seq": {"type": "integer", "minimum": 0, "maximum": 2_147_483_647},
+            },
+            required=("match_id", "seat"),
+        ),
+        tool_get_eigendark_game,
+        read_only=True,
+        idempotent=True,
+        open_world=False,
+    ),
+    ToolDefinition(
+        "take_eigendark_turn",
+        "Take Eigendark turn",
+        "Apply exactly one legal action to the anonymous Eigendark game. Copy kind and args "
+        "from the latest legal_actions, choose strategically, and continue until match_status "
+        "is complete. The move updates a publicly viewable match. " + UNTRUSTED_DATA_NOTICE,
+        _action_input_schema(),
+        tool_submit_action,
+        destructive=False,
+        open_world=True,
+    ),
+)
 
-for _definition in TOOL_DEFINITIONS:
+TOOLS = {
+    definition.name: definition for definition in (*TOOL_DEFINITIONS, *PUBLIC_TOOL_DEFINITIONS)
+}
+
+for _definition in (*TOOL_DEFINITIONS, *PUBLIC_TOOL_DEFINITIONS):
     Draft202012Validator.check_schema(_definition.input_schema)
 Draft202012Validator.check_schema(OUTPUT_BASE)
 
