@@ -52,10 +52,11 @@ sudo install -m 0644 deploy/api.eigendark.nginx.conf \
     /etc/nginx/sites-available/api.eigendark
 
 sudo systemctl daemon-reload
-sudo systemctl enable --now eigendark-agent-mcp.service
+sudo systemctl enable eigendark-agent-mcp.service
+sudo systemctl restart eigendark-agent-mcp.service
 
 for attempt in {1..30}; do
-    if curl --fail --silent --show-error http://127.0.0.1:5003/healthz >/dev/null; then
+    if curl --fail --silent http://127.0.0.1:5003/healthz >/dev/null; then
         break
     fi
     if test "$attempt" -eq 30; then

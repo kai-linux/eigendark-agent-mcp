@@ -11,7 +11,7 @@ WorkingDirectory=/home/bitnami/eigendark-agent-mcp
 Environment=PYTHONUNBUFFERED=1
 Environment=EIGENDARK_MCP_REQUIRE_OPENAI_MTLS=1
 Environment=EIGENDARK_MCP_HTTP_PORT=5003
-ExecStart=/home/bitnami/eigendark-agent-mcp/.venv/bin/eigendark-agent-mcp-http
+ExecStart=/home/bitnami/eigendark-agent-mcp/.venv/bin/python -m eigendark_agent_mcp.http_server
 Restart=on-failure
 RestartSec=3
 TimeoutStartSec=30
@@ -22,7 +22,7 @@ PrivateTmp=true
 ProtectClock=true
 ProtectControlGroups=true
 ProtectHome=tmpfs
-BindReadOnlyPaths=/home/bitnami/eigendark-agent-mcp /home/bitnami/eigendark/runtime
+BindReadOnlyPaths=/home/bitnami/eigendark-agent-mcp /home/bitnami/eigendark/.runtime-python
 ProtectHostname=true
 ProtectKernelLogs=true
 ProtectKernelModules=true
