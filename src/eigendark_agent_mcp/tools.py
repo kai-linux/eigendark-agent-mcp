@@ -64,6 +64,12 @@ ALLOCATION_MAP: dict[str, Any] = {
     "additionalProperties": {"type": "integer", "minimum": 0, "maximum": 10_000},
     "maxProperties": 80,
 }
+PLAY_COST: dict[str, Any] = {"type": "integer", "minimum": -10_000, "maximum": 10_000}
+PLAY_NONNEGATIVE_COST: dict[str, Any] = {
+    "type": "integer",
+    "minimum": 0,
+    "maximum": 10_000,
+}
 EMPTY_ARGS: dict[str, Any] = {"type": "object", "properties": {}, "additionalProperties": False}
 
 
@@ -108,6 +114,19 @@ ACTION_ARGS_SCHEMAS: dict[str, dict[str, Any]] = {
             "energize_mode": SHORT_STRING,
             "play_target_kind": SHORT_STRING,
             "devour_ids": ID_ARRAY,
+            # Bounded metadata emitted by the authoritative engine in legal
+            # play actions and validated again when the move is applied.
+            "source_zone": SHORT_STRING,
+            "play_keyword": SHORT_STRING,
+            "printed_cost": PLAY_NONNEGATIVE_COST,
+            "base_cost": PLAY_NONNEGATIVE_COST,
+            "effective_cost": PLAY_NONNEGATIVE_COST,
+            "cost_delta": PLAY_COST,
+            "tax": PLAY_NONNEGATIVE_COST,
+            "payment_mode": SHORT_STRING,
+            "cost_unit": SHORT_STRING,
+            "alternate_cost": {"type": "boolean"},
+            "synergy_discount": PLAY_NONNEGATIVE_COST,
         },
         required=("card_id",),
         max_properties=20,
@@ -142,9 +161,13 @@ ACTION_ARGS_SCHEMAS: dict[str, dict[str, Any]] = {
         },
         required=("card_id",),
     ),
-    "attach": _object_schema(
-        {"card_id": STRING_ID, "host_id": STRING_ID}, required=("card_id", "host_id")
-    ),
+    "attach": {
+        **_object_schema(
+            {"card_id": STRING_ID, "host": STRING_ID, "host_id": STRING_ID},
+            required=("card_id",),
+        ),
+        "anyOf": [{"required": ["host"]}, {"required": ["host_id"]}],
+    },
     "ritual": _object_schema({"cards": ID_ARRAY, "ritual_id": STRING_ID}, required=("cards",)),
     "join_ritual": _object_schema(
         {"ritual_id": STRING_ID, "card_id": STRING_ID},
@@ -177,15 +200,16 @@ ACTION_ARGS_SCHEMAS: dict[str, dict[str, Any]] = {
 ACTION_KINDS = tuple(ACTION_ARGS_SCHEMAS)
 
 
-def _action_input_schema() -> dict[str, Any]:
+def _action_input_schema(*, include_pace_bot: bool = True) -> dict[str, Any]:
     common = {
         "match_id": STRING_ID,
         "seat": {"type": "integer", "enum": [0, 1]},
         "kind": {"type": "string", "enum": list(ACTION_KINDS)},
         "args": {"type": "object"},
         "since_seq": {"type": "integer", "minimum": 0, "maximum": 2_147_483_647},
-        "pace_bot": {"type": "boolean"},
     }
+    if include_pace_bot:
+        common["pace_bot"] = {"type": "boolean"}
     constraints = []
     for kind, args_schema in ACTION_ARGS_SCHEMAS.items():
         then: dict[str, Any] = {"properties": {"args": args_schema}}
@@ -386,17 +410,34 @@ def tool_play_eigendark(args: Mapping[str, Any]) -> dict[str, Any]:
     if store.api_key() is None:
         tool_onboard_sandbox({"name": "ChatGPT"})
     created = tool_create_bot_match({"agent_id": f"chatgpt-{secrets.token_hex(4)}"})
-    state = tool_get_match_state(
-        {
-            "match_id": created["match_id"],
-            "seat": created["seat"],
-            "since_seq": 0,
-            # The bot may win opening initiative. Advance it here so a cold
-            # client always receives either a legal move or a terminal game,
-            # rather than an inert opponent-turn snapshot.
-            "advance_bot": True,
-        }
-    )
+    state: dict[str, Any] = {}
+    # Paced matches expose one house-bot decision per state read. Drain that
+    # bounded sequence so a cold client always receives either a legal move or
+    # a terminal game, including when the bot wins opening initiative.
+    for _ in range(64):
+        since_seq = state.get("next_seq", 0) if state else 0
+        previous = (
+            (
+                state.get("next_seq"),
+                state.get("active_idx"),
+                state.get("match_status"),
+            )
+            if state
+            else None
+        )
+        state = tool_get_match_state(
+            {
+                "match_id": created["match_id"],
+                "seat": created["seat"],
+                "since_seq": since_seq,
+                "advance_bot": True,
+            }
+        )
+        if state.get("your_turn") or state.get("match_status") == "complete":
+            break
+        current = (state.get("next_seq"), state.get("active_idx"), state.get("match_status"))
+        if current == previous:
+            break
     return {**state, **created}
 
 
@@ -411,6 +452,12 @@ def tool_get_eigendark_game(args: Mapping[str, Any]) -> dict[str, Any]:
             "advance_bot": False,
         }
     )
+
+
+def tool_take_eigendark_turn(args: Mapping[str, Any]) -> dict[str, Any]:
+    """Apply a public move and return only after the house bot yields priority."""
+
+    return tool_submit_action({**args, "pace_bot": False})
 
 
 def tool_join_matchmaking(args: Mapping[str, Any]) -> dict[str, Any]:
@@ -900,8 +947,8 @@ PUBLIC_TOOL_DEFINITIONS = (
         "Apply exactly one legal action to the anonymous Eigendark game. Copy kind and args "
         "from the latest legal_actions, choose strategically, and continue until match_status "
         "is complete. The move updates a publicly viewable match. " + UNTRUSTED_DATA_NOTICE,
-        _action_input_schema(),
-        tool_submit_action,
+        _action_input_schema(include_pace_bot=False),
+        tool_take_eigendark_turn,
         destructive=False,
         open_world=True,
     ),

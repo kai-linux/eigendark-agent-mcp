@@ -71,10 +71,28 @@ def test_cold_play_onboards_creates_match_and_returns_live_link(monkeypatch: pyt
                 },
             }
         assert path.endswith("/M-cold/state")
-        assert body == {"seat": 0, "token": seat_token, "advance_bot": True, "since_seq": 0}
+        state_call = sum(call_path.endswith("/M-cold/state") for _, call_path, _, _ in calls)
+        assert body == {
+            "seat": 0,
+            "token": seat_token,
+            "advance_bot": True,
+            "since_seq": 0 if state_call == 1 else 10,
+        }
+        if state_call == 1:
+            return {
+                "match_id": "M-cold",
+                "match_status": "running",
+                "active_idx": 1,
+                "your_turn": False,
+                "next_seq": 10,
+                "legal_actions": [],
+            }
         return {
             "match_id": "M-cold",
-            "match_status": "active",
+            "match_status": "running",
+            "active_idx": 0,
+            "your_turn": True,
+            "next_seq": 12,
             "legal_actions": [{"kind": "pass", "args": {}}],
             "token": seat_token,
         }
@@ -91,19 +109,57 @@ def test_cold_play_onboards_creates_match_and_returns_live_link(monkeypatch: pyt
         "/api/agent/onboard",
         "/api/agent/match/create-bot",
         "/api/agent/match/M-cold/state",
+        "/api/agent/match/M-cold/state",
     ]
+
+
+def test_public_turn_drives_house_bot_and_hides_pacing_control(monkeypatch: pytest.MonkeyPatch):
+    captured = {}
+
+    def fake_submit(args):
+        captured.update(args)
+        return {"match_status": "running", "your_turn": True, "legal_actions": []}
+
+    monkeypatch.setattr(tools, "tool_submit_action", fake_submit)
+    definition = tools.TOOLS["take_eigendark_turn"]
+    assert "pace_bot" not in definition.input_schema["properties"]
+
+    result = tools.invoke_tool(
+        "take_eigendark_turn",
+        {"match_id": "M-test", "seat": 0, "kind": "pass", "args": {}},
+    )
+
+    assert captured["pace_bot"] is False
+    assert result["your_turn"] is True
 
 
 @pytest.mark.parametrize(
     ("kind", "action_args"),
     [
         ("play", {"card_id": "c1", "target_id": "c2"}),
+        (
+            "play",
+            {
+                "card_id": "c1",
+                "target_id": "c2",
+                "printed_cost": 5,
+                "base_cost": 5,
+                "effective_cost": 4,
+                "cost_delta": 0,
+                "tax": 0,
+                "payment_mode": "mana",
+                "cost_unit": "mana",
+                "alternate_cost": False,
+                "synergy_discount": 1,
+            },
+        ),
         ("pool", {"card_id": "c1"}),
         ("activate_source", {"card_id": "c1"}),
         ("attack", {"attackers": ["c1"], "targets": {"c1": "c2"}}),
         ("block", {"blockers": {"c1": "c2"}}),
         ("recall", {"card_id": "c1"}),
         ("activate", {"card_id": "c1", "mod_index": 0}),
+        ("attach", {"card_id": "c1", "host": "c2"}),
         ("attach", {"card_id": "c1", "host_id": "c2"}),
         ("ritual", {"cards": ["c1", "c2"]}),
         ("join_ritual", {"ritual_id": "r1", "card_id": "c1"}),
