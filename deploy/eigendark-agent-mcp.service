@@ -7,7 +7,7 @@ Wants=network-online.target
 Type=simple
 User=bitnami
 Group=bitnami
-WorkingDirectory=/home/bitnami/eigendark-agent-mcp
+WorkingDirectory=/
 Environment=PYTHONUNBUFFERED=1
 Environment=EIGENDARK_MCP_REQUIRE_OPENAI_MTLS=1
 Environment=EIGENDARK_MCP_HTTP_PORT=5003

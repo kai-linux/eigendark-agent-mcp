@@ -20,6 +20,8 @@ def test_systemd_uses_moved_venv_safely_without_exposing_home_credentials() -> N
     installer = (ROOT / "deploy/install-production.sh").read_text(encoding="utf-8")
 
     assert "ProtectHome=tmpfs" in unit
+    assert "WorkingDirectory=/\n" in unit
+    assert "WorkingDirectory=/home" not in unit
     assert "BindReadOnlyPaths=/home/bitnami/eigendark-agent-mcp " in unit
     assert "/home/bitnami/eigendark/.runtime-python" in unit
     assert "/home/bitnami/eigendark/runtime\n" not in unit
