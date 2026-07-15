@@ -71,7 +71,7 @@ def test_cold_play_onboards_creates_match_and_returns_live_link(monkeypatch: pyt
                 },
             }
         assert path.endswith("/M-cold/state")
-        assert body == {"seat": 0, "token": seat_token, "advance_bot": False, "since_seq": 0}
+        assert body == {"seat": 0, "token": seat_token, "advance_bot": True, "since_seq": 0}
         return {
             "match_id": "M-cold",
             "match_status": "active",
