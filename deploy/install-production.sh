@@ -2,24 +2,43 @@
 set -euo pipefail
 
 ROOT=/home/bitnami/eigendark-agent-mcp
-PYTHON=/home/bitnami/eigendark/runtime/bin/python
+SOURCE_PYTHON=/home/bitnami/eigendark/runtime/bin/python
+RUNTIME=/opt/eigendark-agent-mcp
+RUNTIME_NEXT=/opt/eigendark-agent-mcp.next
+RUNTIME_PREVIOUS=/opt/eigendark-agent-mcp.previous
+PYTHON_INSTALL_ROOT=/opt/eigendark-python
 OPENAI_CA_DIR=/etc/nginx/openai-connectors
 
 cd "$ROOT"
-test -x "$PYTHON"
+test -x "$SOURCE_PYTHON"
 
-rm -rf .venv.next
-"$PYTHON" -m venv .venv.next
-.venv.next/bin/python -m pip install --disable-pip-version-check \
+source_python_real=$(readlink -f "$SOURCE_PYTHON")
+source_python_root=$(dirname "$(dirname "$source_python_real")")
+python_id=$(basename "$source_python_root")-$(sha256sum "$source_python_real" | cut -c1-16)
+python_root="$PYTHON_INSTALL_ROOT/$python_id"
+python="$python_root/bin/python3.12"
+
+if ! test -x "$python"; then
+    sudo install -d -m 0755 "$PYTHON_INSTALL_ROOT"
+    sudo rm -rf "$python_root.next"
+    sudo cp -a "$source_python_root" "$python_root.next"
+    sudo chown -R root:root "$python_root.next"
+    sudo chmod -R go-w "$python_root.next"
+    sudo mv "$python_root.next" "$python_root"
+fi
+test -x "$python"
+
+sudo rm -rf "$RUNTIME_NEXT"
+sudo install -d -m 0755 -o bitnami -g bitnami "$RUNTIME_NEXT"
+"$python" -m venv "$RUNTIME_NEXT/.venv"
+"$RUNTIME_NEXT/.venv/bin/python" -m pip install --disable-pip-version-check \
     --only-binary=:all: --require-hashes -r requirements-runtime.lock
-.venv.next/bin/python -m pip install --disable-pip-version-check \
+"$RUNTIME_NEXT/.venv/bin/python" -m pip install --disable-pip-version-check \
     --only-binary=:all: --require-hashes -r requirements-build.lock
-.venv.next/bin/python -m pip install --disable-pip-version-check \
+"$RUNTIME_NEXT/.venv/bin/python" -m pip install --disable-pip-version-check \
     --no-deps --no-build-isolation .
-
-rm -rf .venv.previous
-if test -d .venv; then mv .venv .venv.previous; fi
-mv .venv.next .venv
+sudo chown -R root:root "$RUNTIME_NEXT"
+sudo chmod -R go-w "$RUNTIME_NEXT"
 
 tmpdir=$(mktemp -d)
 trap 'rm -rf "$tmpdir"' EXIT
@@ -51,22 +70,34 @@ sudo install -m 0644 deploy/eigendark-agent-mcp.service \
 sudo install -m 0644 deploy/api.eigendark.nginx.conf \
     /etc/nginx/sites-available/api.eigendark
 
+sudo nginx -t
 sudo systemctl daemon-reload
 sudo systemctl enable eigendark-agent-mcp.service
-sudo systemctl restart eigendark-agent-mcp.service
+sudo systemctl stop eigendark-agent-mcp.service || true
+sudo rm -rf "$RUNTIME_PREVIOUS"
+if test -d "$RUNTIME"; then sudo mv "$RUNTIME" "$RUNTIME_PREVIOUS"; fi
+sudo mv "$RUNTIME_NEXT" "$RUNTIME"
+sudo systemctl start eigendark-agent-mcp.service
 
+healthy=0
 for attempt in {1..30}; do
     if curl --fail --silent http://127.0.0.1:5003/healthz >/dev/null; then
+        healthy=1
         break
-    fi
-    if test "$attempt" -eq 30; then
-        sudo systemctl status --no-pager eigendark-agent-mcp.service
-        exit 1
     fi
     sleep 1
 done
+if test "$healthy" -ne 1; then
+    sudo systemctl stop eigendark-agent-mcp.service || true
+    if test -d "$RUNTIME_PREVIOUS"; then
+        sudo rm -rf "$RUNTIME"
+        sudo mv "$RUNTIME_PREVIOUS" "$RUNTIME"
+        sudo systemctl start eigendark-agent-mcp.service || true
+    fi
+    sudo systemctl status --no-pager eigendark-agent-mcp.service || true
+    exit 1
+fi
 
-sudo nginx -t
 sudo systemctl reload nginx
 trap - EXIT
 rm -rf "$tmpdir"
