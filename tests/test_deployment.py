@@ -29,3 +29,18 @@ def test_systemd_runtime_cannot_read_home_credentials() -> None:
     assert "PYTHON_INSTALL_ROOT=/opt/eigendark-python" in installer
     assert "systemctl start eigendark-agent-mcp.service" in installer
     assert "RUNTIME_PREVIOUS" in installer
+
+
+def test_custom_gpt_action_uses_validated_openai_egress_allowlist() -> None:
+    nginx = (ROOT / "deploy/api.eigendark.nginx.conf").read_text(encoding="utf-8")
+    installer = (ROOT / "deploy/install-production.sh").read_text(encoding="utf-8")
+
+    assert "https://openai.com/chatgpt-actions.json" in installer
+    assert "ipaddress.ip_network(value, strict=True)" in installer
+    assert "network.is_global" in installer
+    assert "OPENAI_ACTIONS_IP_DIR=/etc/nginx/openai-actions" in installer
+    assert "include /etc/nginx/openai-actions/client-ips.conf;" in nginx
+    assert nginx.count("if ($eigendark_openai_action_client = 0) { return 403; }") == 2
+    assert "location = /gpt/openapi.json" in nginx
+    assert "location = /gpt/play" in nginx
+    assert "location ~ ^/gpt/(game|turn)$" in nginx

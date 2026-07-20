@@ -8,6 +8,7 @@ RUNTIME_NEXT=/opt/eigendark-agent-mcp.next
 RUNTIME_PREVIOUS=/opt/eigendark-agent-mcp.previous
 PYTHON_INSTALL_ROOT=/opt/eigendark-python
 OPENAI_CA_DIR=/etc/nginx/openai-connectors
+OPENAI_ACTIONS_IP_DIR=/etc/nginx/openai-actions
 
 cd "$ROOT"
 test -x "$SOURCE_PYTHON"
@@ -48,6 +49,9 @@ curl --fail --silent --show-error --location \
 curl --fail --silent --show-error --location \
     https://developers.openai.com/apps-sdk/mtls/openai-connectors-mtls-ca.pem \
     --output "$tmpdir/openai-connectors-mtls-ca.pem"
+curl --fail --silent --show-error --location \
+    https://openai.com/chatgpt-actions.json \
+    --output "$tmpdir/chatgpt-actions.json"
 openssl x509 -in "$tmpdir/openai-root-ca.pem" -noout >/dev/null
 openssl x509 -in "$tmpdir/openai-connectors-mtls-ca.pem" -noout >/dev/null
 test "$(openssl x509 -in "$tmpdir/openai-root-ca.pem" -noout -subject -nameopt RFC2253)" = \
@@ -63,8 +67,38 @@ openssl verify -CAfile "$tmpdir/openai-root-ca.pem" \
 cat "$tmpdir/openai-connectors-mtls-ca.pem" "$tmpdir/openai-root-ca.pem" \
     > "$tmpdir/client-ca.pem"
 
+"$python" - "$tmpdir/chatgpt-actions.json" "$tmpdir/client-ips.conf" <<'PY'
+import ipaddress
+import json
+import pathlib
+import sys
+
+source = pathlib.Path(sys.argv[1])
+destination = pathlib.Path(sys.argv[2])
+document = json.loads(source.read_text(encoding="utf-8"))
+prefixes = document.get("prefixes")
+if not isinstance(prefixes, list) or not 32 <= len(prefixes) <= 1024:
+    raise SystemExit("OpenAI Actions IP document had an unexpected shape")
+networks = set()
+for entry in prefixes:
+    if not isinstance(entry, dict):
+        raise SystemExit("OpenAI Actions IP entry was invalid")
+    value = entry.get("ipv4Prefix") or entry.get("ipv6Prefix")
+    try:
+        network = ipaddress.ip_network(value, strict=True)
+    except (TypeError, ValueError) as exc:
+        raise SystemExit("OpenAI Actions IP prefix was invalid") from exc
+    if not network.is_global:
+        raise SystemExit("OpenAI Actions IP prefix was not public")
+    networks.add(network)
+ordered = sorted(networks, key=lambda item: (item.version, int(item.network_address), item.prefixlen))
+destination.write_text("".join(f"    {item} 1;\n" for item in ordered), encoding="ascii")
+PY
+
 sudo install -d -m 0755 "$OPENAI_CA_DIR"
 sudo install -m 0644 "$tmpdir/client-ca.pem" "$OPENAI_CA_DIR/client-ca.pem"
+sudo install -d -m 0755 "$OPENAI_ACTIONS_IP_DIR"
+sudo install -m 0644 "$tmpdir/client-ips.conf" "$OPENAI_ACTIONS_IP_DIR/client-ips.conf"
 sudo install -m 0644 deploy/eigendark-agent-mcp.service \
     /etc/systemd/system/eigendark-agent-mcp.service
 sudo install -m 0644 deploy/api.eigendark.nginx.conf \

@@ -114,6 +114,20 @@ Requests, sessions, bodies, workers, and memory are bounded. The installable plu
 source and deployment configuration live in [`plugin/eigendark`](plugin/eigendark)
 and [`deploy`](deploy).
 
+## Custom GPT Action
+
+The same service exposes an OpenAPI schema at
+`https://api.eigendark.com/gpt/openapi.json` for the no-setup Eigendark Custom
+GPT. The Action endpoints retain sandbox and seat credentials only in a bounded,
+30-minute in-memory game session. ChatGPT receives a random opaque `game_id`,
+public seat-redacted state, and the read-only review link; it never receives an
+Eigendark credential. Each handle is call-bounded and erased at game completion.
+
+Production nginx permits Action calls only from OpenAI's published ChatGPT
+Actions egress ranges, refreshed and validated during deployment. The public
+schema remains readable for editor validation. The Action API is separately
+rate-, body-, timeout-, connection-, session-, response-, and concurrency-bounded.
+
 ## Play flow
 
 1. Call `onboard_sandbox` unless `EIGENDARK_API_KEY` is already configured.
