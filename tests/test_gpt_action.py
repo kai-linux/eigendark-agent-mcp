@@ -7,7 +7,9 @@ import pytest
 from starlette.testclient import TestClient
 
 from eigendark_agent_mcp import gpt_action, http_server
+from eigendark_agent_mcp.errors import ToolError
 from eigendark_agent_mcp.runtime import CredentialStore, credentials
+from eigendark_agent_mcp.tools import invoke_tool
 
 
 def _fake_action_tool(name: str, arguments: dict[str, object]) -> dict[str, object]:
@@ -79,7 +81,15 @@ def test_openapi_schema_is_noauth_exact_and_action_safe() -> None:
         )
 
     turn = operations["/gpt/turn"]["requestBody"]["content"]["application/json"]["schema"]
-    assert set(turn["required"]) == {"game_id", "kind"}
+    assert set(turn["required"]) == {"game_id", "kind", "args"}
+    assert "allOf" not in turn
+    assert turn["properties"]["args"] == {
+        "type": "object",
+        "properties": {},
+        "additionalProperties": True,
+        "maxProperties": 80,
+        "description": "Exact args object copied from the same legal_actions entry.",
+    }
     assert {"match_id", "seat", "since_seq", "api_key", "token"}.isdisjoint(turn["properties"])
     assert turn["additionalProperties"] is False
 
@@ -151,6 +161,27 @@ def test_custom_gpt_action_rejects_non_schema_inputs(path: str, body: object) ->
     assert response.status_code in {400, 404}
     assert set(response.json()) == {"error"}
     assert "seat_secret" not in response.text
+
+
+def test_compatible_http_args_remain_exactly_validated_before_backend_use() -> None:
+    body = {
+        "game_id": "edg_" + "a" * 43,
+        "kind": "pass",
+        "args": {"token": "not_allowed"},
+    }
+    gpt_action._validate(gpt_action.TURN_REQUEST_SCHEMA, body)
+
+    with pytest.raises(ToolError, match="published JSON schema"):
+        invoke_tool(
+            "take_eigendark_turn",
+            {
+                "match_id": "M-test",
+                "seat": 0,
+                "kind": body["kind"],
+                "args": body["args"],
+                "since_seq": 0,
+            },
+        )
 
 
 def test_game_registry_is_bounded_and_expiring() -> None:
