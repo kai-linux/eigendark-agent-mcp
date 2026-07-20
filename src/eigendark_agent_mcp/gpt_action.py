@@ -29,7 +29,7 @@ from starlette.routing import Route
 from .errors import ToolError
 from .runtime import CredentialStore, credential_scope
 from .security import UNTRUSTED_DATA_NOTICE, redact_text
-from .tools import TOOLS, invoke_tool
+from .tools import ACTION_KINDS, invoke_tool
 
 LOGGER = logging.getLogger(__name__)
 
@@ -69,17 +69,24 @@ GAME_HANDLE_SCHEMA = {
 PLAY_REQUEST_SCHEMA = _exact_object_schema({})
 GAME_REQUEST_SCHEMA = _exact_object_schema({"game_id": GAME_HANDLE_SCHEMA}, required=("game_id",))
 
-TURN_REQUEST_SCHEMA = copy.deepcopy(TOOLS["take_eigendark_turn"].input_schema)
-TURN_REQUEST_SCHEMA["properties"].pop("match_id")
-TURN_REQUEST_SCHEMA["properties"].pop("seat")
-TURN_REQUEST_SCHEMA["properties"].pop("since_seq", None)
-TURN_REQUEST_SCHEMA["properties"]["game_id"] = copy.deepcopy(GAME_HANDLE_SCHEMA)
-TURN_REQUEST_SCHEMA["required"] = [
-    field_name
-    for field_name in TURN_REQUEST_SCHEMA["required"]
-    if field_name not in {"match_id", "seat"}
-]
-TURN_REQUEST_SCHEMA["required"].insert(0, "game_id")
+TURN_REQUEST_SCHEMA = _exact_object_schema(
+    {
+        "game_id": GAME_HANDLE_SCHEMA,
+        "kind": {
+            "type": "string",
+            "enum": list(ACTION_KINDS),
+            "description": "Exact kind copied from one latest legal_actions entry.",
+        },
+        "args": {
+            "type": "object",
+            "properties": {},
+            "additionalProperties": True,
+            "maxProperties": 80,
+            "description": "Exact args object copied from the same legal_actions entry.",
+        },
+    },
+    required=("game_id", "kind", "args"),
+)
 
 for _schema in (PLAY_REQUEST_SCHEMA, GAME_REQUEST_SCHEMA, TURN_REQUEST_SCHEMA):
     Draft202012Validator.check_schema(_schema)
