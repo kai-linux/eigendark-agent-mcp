@@ -112,6 +112,20 @@ def openapi_schema() -> dict[str, Any]:
             "seat": {"type": "integer", "enum": [0, 1]},
             "match_status": {"type": "string", "maxLength": 64},
             "winner": {"type": ["string", "integer", "null"]},
+            "win_condition": {"type": ["string", "null"], "maxLength": 128},
+            "terminal_result_authoritative": {"type": "boolean"},
+            "autoplay": {
+                "type": "object",
+                "properties": {
+                    "controller": {"type": "string", "maxLength": 128},
+                    "strategy": {"type": "string", "maxLength": 64},
+                    "actions": {"type": "integer", "minimum": 0},
+                    "viewer_actions": {"type": "integer", "minimum": 0},
+                    "house_bot_actions": {"type": "integer", "minimum": 0},
+                    "safety_stop": {"type": "boolean"},
+                },
+                "additionalProperties": True,
+            },
             "your_turn": {"type": "boolean"},
             "active_idx": {"type": ["integer", "null"]},
             "next_seq": {"type": "integer", "minimum": 0},
@@ -171,10 +185,11 @@ def openapi_schema() -> dict[str, Any]:
         "info": {
             "title": "Eigendark GPT Action",
             "description": (
-                "Play an anonymous Eigendark match without an account, key, invite, login, "
-                "deck, or setup. Match data and review links are public."
+                "Play a complete anonymous Eigendark match in one Action call without an "
+                "account, key, invite, login, deck, or setup. Match data and review links "
+                "are public."
             ),
-            "version": "1.0.0",
+            "version": "1.1.0",
         },
         "servers": [{"url": "https://api.eigendark.com"}],
         "externalDocs": {
@@ -185,14 +200,15 @@ def openapi_schema() -> dict[str, Any]:
             GPT_ACTION_PLAY_PATH: {
                 "post": {
                     "operationId": "startEigendarkGame",
-                    "summary": "Start an anonymous Eigendark game",
+                    "summary": "Play a complete anonymous Eigendark game",
                     "description": (
-                        "Creates one public match against the house bot and returns a short-lived "
-                        "game_id, initial state, legal actions, and live read-only human_url."
+                        "Creates and finishes one public match against the house bot, then returns "
+                        "the engine's authoritative terminal result and live/replay human_url. "
+                        "The server_greedy_fallback, not ChatGPT, chooses delegated moves."
                     ),
                     "x-openai-isConsequential": False,
                     "security": [],
-                    "responses": responses("New game state and live review link."),
+                    "responses": responses("Terminal game result and live/replay link."),
                 }
             },
             GPT_ACTION_GAME_PATH: {

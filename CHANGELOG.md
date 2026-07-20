@@ -6,13 +6,18 @@
   process-shared sandbox key across sessions for match creation (seat tokens
   stay per-session) so onboarding volume is decoupled from session count and
   cannot exhaust the website's per-IP mint cap from the single VPS egress IP;
-- bounded the cold-start bot-drain to a small read cap plus a wall-clock
-  deadline so one call cannot fan out to dozens of upstream requests or pin a
-  worker slot for long;
+- replaced the cold-start multi-read bot drain with one bounded backend
+  completion request so one call cannot fan out across many HTTP requests;
 - kept the per-session credential scope active around error handling so
   failure output is redacted with the session's own secret values; and
 - dropped loopback host entries from the production transport allowlist
   (nginx pins the Host); retained for local/dev runs.
+- changed the public `play_eigendark` and Custom GPT `/gpt/play` contracts to
+  complete the created house-bot match in one bounded backend operation;
+- require an authoritative terminal response before returning success, while
+  retaining per-turn tools for deliberate manual play and recovery; and
+- identify the deterministic server fallback truthfully so clients cannot
+  claim that a frontier model chose moves it did not choose.
 
 ## 0.5.0 - 2026-07-15
 

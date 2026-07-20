@@ -124,9 +124,11 @@ issues, logs, screenshots, or shared agent context.
 The public app uses Streamable HTTP at `https://api.eigendark.com/mcp`. It exposes
 only three no-auth tools: `play_eigendark`, `get_eigendark_game`, and
 `take_eigendark_turn`. `play_eigendark` performs anonymous sandbox onboarding,
-creates a bot match, retains all capabilities only in that MCP session, and returns
-the initial state plus a public read-only live/replay URL. ChatGPT then chooses only
-from server-issued legal actions until the match completes.
+creates a bot match, retains all capabilities only in that MCP session, and drives
+that match to an authoritative terminal result before its single tool call returns.
+The response includes a public read-only live/replay URL and explicitly identifies
+the deterministic server fallback that chose the delegated moves. The state and
+turn tools remain available for deliberate manual play and recovery.
 
 The hosted process binds to loopback. Production nginx verifies ChatGPT's mTLS
 client certificate and overwrites the forwarded certificate headers; the Python
@@ -142,7 +144,9 @@ The same service exposes an OpenAPI schema at
 GPT. The Action endpoints retain sandbox and seat credentials only in a bounded,
 30-minute in-memory game session. ChatGPT receives a random opaque `game_id`,
 public seat-redacted state, and the read-only review link; it never receives an
-Eigendark credential. Each handle is call-bounded and erased at game completion.
+Eigendark credential. The normal `/gpt/play` response is already terminal, and its
+ephemeral handle is erased immediately. The recovery/turn routes remain bounded for
+older running sessions.
 
 Production nginx permits Action calls only from OpenAI's published ChatGPT
 Actions egress ranges, refreshed and validated during deployment. The public
@@ -154,12 +158,15 @@ rate-, body-, timeout-, connection-, session-, response-, and concurrency-bounde
 1. Call `onboard_sandbox` unless `EIGENDARK_API_KEY` is already configured.
 2. Call `create_bot_match`, or call `join_matchmaking` and poll
    `matchmaking_status` after `poll_after_ms`.
-3. Call `get_match_state` with only the returned `match_id` and `seat`. The seat
+3. For a house-bot match that should finish without client orchestration, call the
+   authenticated Agent API `autoplay` operation once. The public `play_eigendark`
+   tool performs this automatically.
+4. For deliberate manual play, call `get_match_state` with only the returned `match_id` and `seat`. The seat
    credential is resolved internally. Bot advancement defaults to enabled.
-4. When `your_turn` is true, copy one `kind`/`args` pair from `legal_actions`
+5. When `your_turn` is true, copy one `kind`/`args` pair from `legal_actions`
    into `submit_action`.
-5. Repeat until `match_status` is `complete`.
-6. Optionally call `share_replay` to create a read-only human link.
+6. Repeat until `match_status` is `complete`.
+7. Optionally call `share_replay` to create a read-only human link.
 
 The backend remains authoritative for legality. Supported action schemas cover
 `play`, `pool`, `activate_source`, `attack`, `block`, `recall`, `activate`,

@@ -506,58 +506,51 @@ def tool_create_bot_match(args: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
-# Bound the cold-start bot-drain: a single inbound play_eigendark call must
-# not fan out to dozens of upstream Flask requests nor pin a worker slot for
-# long. A handful of reads plus a wall-clock budget is enough to surface the
-# opening decision; the client polls get_eigendark_game for anything beyond.
-_PLAY_DRAIN_MAX_READS = 8
-_PLAY_DRAIN_BUDGET_SECONDS = 10.0
-
-
 def tool_play_eigendark(args: Mapping[str, Any]) -> dict[str, Any]:
-    """Cold-start an anonymous match without exposing onboarding to the model."""
+    """Cold-start and finish an anonymous match in one model-visible call."""
 
     store = credentials()
     # Reuse the process-shared sandbox key (mint only if none is cached/fresh);
     # retry once against a freshly minted key if the cached one was revoked.
     _ensure_shared_sandbox_key(store)
     try:
-        created = tool_create_bot_match({"agent_id": f"chatgpt-{secrets.token_hex(4)}"})
+        created = tool_create_bot_match({"agent_id": f"delegated-{secrets.token_hex(4)}"})
     except ToolError:
         _clear_shared_sandbox_key()
         _ensure_shared_sandbox_key(store)
-        created = tool_create_bot_match({"agent_id": f"chatgpt-{secrets.token_hex(4)}"})
-    state: dict[str, Any] = {}
-    # Paced matches expose one house-bot decision per state read. Drain that
-    # bounded sequence so a cold client usually receives either a legal move or
-    # a terminal game — but stop at a small read cap AND a wall-clock deadline
-    # so one call can't amplify into a long upstream fan-out.
-    deadline = time.monotonic() + _PLAY_DRAIN_BUDGET_SECONDS
-    for _ in range(_PLAY_DRAIN_MAX_READS):
-        since_seq = state.get("next_seq", 0) if state else 0
-        previous = (
-            (
-                state.get("next_seq"),
-                state.get("active_idx"),
-                state.get("match_status"),
-            )
-            if state
-            else None
-        )
-        state = tool_get_match_state(
-            {
-                "match_id": created["match_id"],
-                "seat": created["seat"],
-                "since_seq": since_seq,
-                "advance_bot": True,
-            }
-        )
-        if state.get("your_turn") or state.get("match_status") == "complete":
-            break
-        current = (state.get("next_seq"), state.get("active_idx"), state.get("match_status"))
-        if current == previous or time.monotonic() >= deadline:
-            break
-    return {**state, **created}
+        created = tool_create_bot_match({"agent_id": f"delegated-{secrets.token_hex(4)}"})
+    finished = _autoplay_bot_match(created["match_id"], created["seat"])
+    return public_result(
+        {
+            **created,
+            **finished,
+            "terminal_result_authoritative": True,
+            "next": (
+                "Report the returned winner or draw and the same human_url; "
+                "do not invent a different result."
+            ),
+        }
+    )
+
+
+def _autoplay_bot_match(match_id: str, seat: int) -> dict[str, Any]:
+    """Delegate a stored house-bot seat and require an authoritative terminal reply."""
+
+    ensure_no_secret(match_id, "match_id")
+    result = json_request(
+        "POST",
+        _match_path(match_id, "autoplay"),
+        body={
+            "seat": seat,
+            "token": credentials().seat_token(match_id, seat),
+            # The replay URL carries the full event stream. Keep the connector
+            # response safely bounded by requesting no historical event delta.
+            "since_seq": 2_147_483_647,
+        },
+    )
+    if result.get("match_status") != "complete":
+        raise ToolError("The Eigendark service did not return an authoritative terminal result")
+    return public_result(result)
 
 
 def tool_get_eigendark_game(args: Mapping[str, Any]) -> dict[str, Any]:
@@ -839,7 +832,7 @@ def _safe_public_url(value: Any) -> str | None:
 
 
 def _match_path(match_id: str, operation: str) -> str:
-    if operation not in {"state", "action", "share"}:
+    if operation not in {"state", "action", "autoplay", "share"}:
         raise ToolError("Internal match operation was rejected")
     return f"/api/agent/match/{urllib.parse.quote(match_id, safe='')}/{operation}"
 
@@ -1033,10 +1026,12 @@ PUBLIC_TOOL_DEFINITIONS = (
     ToolDefinition(
         "play_eigendark",
         "Play Eigendark",
-        "Start an anonymous Eigendark game against the house bot when the user asks to "
-        "play Eigendark. This creates a publicly viewable match and returns its live, "
-        "read-only review link. No account, key, invite, or setup is needed. "
-        + UNTRUSTED_DATA_NOTICE,
+        "Play a complete anonymous Eigendark game against the house bot in this one call when "
+        "the user asks to play Eigendark. It returns only after the engine reports an "
+        "authoritative victory, defeat, or safety draw, together with the public read-only "
+        "live/replay link. A transparent deterministic fallback chooses both seats; do not "
+        "claim the language model chose those remaining moves. No account, key, invite, or "
+        "setup is needed. " + UNTRUSTED_DATA_NOTICE,
         _object_schema({}),
         tool_play_eigendark,
         destructive=False,
