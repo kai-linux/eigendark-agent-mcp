@@ -29,6 +29,7 @@ from starlette.types import ASGIApp, Message, Receive, Scope, Send
 
 from . import __version__
 from .errors import ToolError
+from .gpt_action import GPTActionService
 from .runtime import SessionCredentialRegistry, credential_scope
 from .security import redact_text
 from .tools import PUBLIC_TOOL_DEFINITIONS, invoke_tool
@@ -143,7 +144,8 @@ class BoundedRequestMiddleware:
             await self.app(scope, receive, send)
             return
         async with self._limiter:
-            if scope.get("method") != "POST" or scope.get("path") != "/mcp":
+            bounded_paths = {"/mcp", "/gpt/play", "/gpt/game", "/gpt/turn"}
+            if scope.get("method") != "POST" or scope.get("path") not in bounded_paths:
                 await self.app(scope, receive, send)
                 return
             messages: list[Message] = []
@@ -270,6 +272,7 @@ def create_http_app(*, require_openai_mtls: bool | None = None) -> ASGIApp:
         security_settings=security,
         session_idle_timeout=HTTP_SESSION_IDLE_SECONDS,
     )
+    action_service = GPTActionService()
 
     @asynccontextmanager
     async def lifespan(_: Starlette):
@@ -277,7 +280,11 @@ def create_http_app(*, require_openai_mtls: bool | None = None) -> ASGIApp:
             yield
 
     app: ASGIApp = Starlette(
-        routes=[Route("/mcp", endpoint=MCPASGIApp(manager)), Route("/healthz", health)],
+        routes=[
+            Route("/mcp", endpoint=MCPASGIApp(manager)),
+            *action_service.routes(),
+            Route("/healthz", health),
+        ],
         lifespan=lifespan,
     )
     app = OpenAIMTLSMiddleware(app, required=require_openai_mtls)
