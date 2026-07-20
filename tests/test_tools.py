@@ -284,6 +284,53 @@ def test_shared_sandbox_key_reused_across_sessions(monkeypatch: pytest.MonkeyPat
     assert onboards == 1  # minted once, reused across all three sessions
 
 
+def test_shared_sandbox_key_survives_restart_via_state_dir(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+):
+    # With a StateDirectory configured, the shared key persists across a
+    # process restart (simulated by dropping the in-memory cache) so a restart
+    # loop cannot re-mint against the website's scarce per-IP daily budget.
+    from eigendark_agent_mcp.runtime import CredentialStore, credential_scope
+
+    monkeypatch.setenv("EIGENDARK_MCP_STATE_DIR", str(tmp_path))
+    onboards = 0
+
+    def fake_request(method, path, *, body=None, bearer=None):
+        nonlocal onboards
+        if path.endswith("/challenge"):
+            return {
+                "challenge_id": "persist-challenge",
+                "reception_protocol": {"zone_from": 6, "cost": 1},
+                "proof_of_work": {"algorithm": "sha256", "difficulty": 1},
+            }
+        if path == "/api/agent/onboard":
+            onboards += 1
+            return {"api_key": "api_persist_key", "tier": "sandbox", "limits": {}}
+        if path.endswith("/create-bot"):
+            return {"match_id": "M-persist", "seat": 0, "token": "seat_tok"}
+        return {
+            "match_id": "M-persist",
+            "match_status": "complete",
+            "your_turn": False,
+            "next_seq": 1,
+        }
+
+    monkeypatch.setattr(tools, "json_request", fake_request)
+
+    with credential_scope(CredentialStore()):
+        tools.invoke_tool("play_eigendark", {})
+    assert (tmp_path / "shared-sandbox-key.json").exists()
+
+    # Simulate a restart: drop ONLY the in-memory cache, leave the disk file.
+    tools._shared_sandbox_key = None
+    tools._shared_sandbox_key_expires_at = 0.0
+
+    with credential_scope(CredentialStore()):
+        tools.invoke_tool("play_eigendark", {})
+
+    assert onboards == 1  # reloaded from disk after "restart", not re-minted
+
+
 def test_pow_and_zone_solver():
     challenge_id = "a" * 32
     nonce = tools.solve_pow(challenge_id, 2)
