@@ -1,5 +1,19 @@
 # Changelog
 
+## Unreleased
+
+- hardened the public `/mcp/public` endpoint against abuse: reuse one
+  process-shared sandbox key across sessions for match creation (seat tokens
+  stay per-session) so onboarding volume is decoupled from session count and
+  cannot exhaust the website's per-IP mint cap from the single VPS egress IP;
+- bounded the cold-start bot-drain to a small read cap plus a wall-clock
+  deadline so one call cannot fan out to dozens of upstream requests or pin a
+  worker slot for long;
+- kept the per-session credential scope active around error handling so
+  failure output is redacted with the session's own secret values; and
+- dropped loopback host entries from the production transport allowlist
+  (nginx pins the Host); retained for local/dev runs.
+
 ## 0.5.0 - 2026-07-15
 
 - added a no-auth Streamable HTTP transport for the public ChatGPT app with a

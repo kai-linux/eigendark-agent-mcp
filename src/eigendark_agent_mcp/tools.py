@@ -6,6 +6,7 @@ import hashlib
 import logging
 import secrets
 import threading
+import time
 import urllib.parse
 from collections.abc import Callable, Mapping
 from dataclasses import dataclass
@@ -334,8 +335,9 @@ def tool_onboard_sandbox(args: Mapping[str, Any]) -> dict[str, Any]:
         _ONBOARD_LOCK.release()
 
 
-def _onboard_sandbox(args: Mapping[str, Any]) -> dict[str, Any]:
-    name = args.get("name")
+def _mint_sandbox_key(name: str | None = None) -> Mapping[str, Any]:
+    """Run the challenge + proof-of-work + mint flow, returning the raw minted
+    document (api_key, tier, expires_at, limits). Does not store anything."""
     if name is not None:
         ensure_no_secret(name, "name")
     challenge = json_request("POST", "/api/agent/onboard/challenge")
@@ -354,7 +356,50 @@ def _onboard_sandbox(args: Mapping[str, Any]) -> dict[str, Any]:
     }
     if isinstance(name, str):
         body["name"] = name
-    minted = json_request("POST", "/api/agent/onboard", body=body)
+    return json_request("POST", "/api/agent/onboard", body=body)
+
+
+# One anonymous sandbox key is shared across public MCP sessions for match
+# CREATION only — seat tokens stay per-session, so match isolation is intact.
+# This decouples onboarding volume from session count: without it, every new
+# session minted a fresh key, and because all onboards egress from the single
+# VPS IP they collided against the website's per-IP mint cap (5/day), letting
+# one client (or organic popularity) DoS onboarding for everyone. Refreshed
+# well inside the key's 7-day server TTL, so the process mints ~weekly.
+_SHARED_KEY_LOCK = threading.Lock()
+_SHARED_KEY_TTL_SECONDS = 6 * 24 * 60 * 60
+_shared_sandbox_key: str | None = None
+_shared_sandbox_key_refresh_at: float = 0.0
+
+
+def _clear_shared_sandbox_key() -> None:
+    global _shared_sandbox_key, _shared_sandbox_key_refresh_at
+    with _SHARED_KEY_LOCK:
+        _shared_sandbox_key = None
+        _shared_sandbox_key_refresh_at = 0.0
+
+
+def _ensure_shared_sandbox_key(store) -> None:
+    """Populate the session store's api key from the shared cache, minting a
+    fresh shared key only when none is cached or the cached one is stale."""
+    global _shared_sandbox_key, _shared_sandbox_key_refresh_at
+    if store.api_key() is not None:
+        return
+    with _SHARED_KEY_LOCK:
+        now = time.monotonic()
+        if _shared_sandbox_key is not None and now < _shared_sandbox_key_refresh_at:
+            store.remember_api_key(_shared_sandbox_key)
+            return
+        minted = _mint_sandbox_key("Eigendark Public MCP")
+        api_key = _required_service_string(minted, "api_key", max_length=4096)
+        _shared_sandbox_key = api_key
+        _shared_sandbox_key_refresh_at = now + _SHARED_KEY_TTL_SECONDS
+        store.remember_api_key(api_key)
+
+
+def _onboard_sandbox(args: Mapping[str, Any]) -> dict[str, Any]:
+    name = args.get("name")
+    minted = _mint_sandbox_key(name)
     api_key = _required_service_string(minted, "api_key", max_length=4096)
     credentials().remember_api_key(api_key)
     limits = minted.get("limits") if isinstance(minted.get("limits"), Mapping) else {}
@@ -403,18 +448,34 @@ def tool_create_bot_match(args: Mapping[str, Any]) -> dict[str, Any]:
     )
 
 
+# Bound the cold-start bot-drain: a single inbound play_eigendark call must
+# not fan out to dozens of upstream Flask requests nor pin a worker slot for
+# long. A handful of reads plus a wall-clock budget is enough to surface the
+# opening decision; the client polls get_eigendark_game for anything beyond.
+_PLAY_DRAIN_MAX_READS = 8
+_PLAY_DRAIN_BUDGET_SECONDS = 10.0
+
+
 def tool_play_eigendark(args: Mapping[str, Any]) -> dict[str, Any]:
     """Cold-start an anonymous match without exposing onboarding to the model."""
 
     store = credentials()
-    if store.api_key() is None:
-        tool_onboard_sandbox({"name": "ChatGPT"})
-    created = tool_create_bot_match({"agent_id": f"chatgpt-{secrets.token_hex(4)}"})
+    # Reuse the process-shared sandbox key (mint only if none is cached/fresh);
+    # retry once against a freshly minted key if the cached one was revoked.
+    _ensure_shared_sandbox_key(store)
+    try:
+        created = tool_create_bot_match({"agent_id": f"chatgpt-{secrets.token_hex(4)}"})
+    except ToolError:
+        _clear_shared_sandbox_key()
+        _ensure_shared_sandbox_key(store)
+        created = tool_create_bot_match({"agent_id": f"chatgpt-{secrets.token_hex(4)}"})
     state: dict[str, Any] = {}
     # Paced matches expose one house-bot decision per state read. Drain that
-    # bounded sequence so a cold client always receives either a legal move or
-    # a terminal game, including when the bot wins opening initiative.
-    for _ in range(64):
+    # bounded sequence so a cold client usually receives either a legal move or
+    # a terminal game — but stop at a small read cap AND a wall-clock deadline
+    # so one call can't amplify into a long upstream fan-out.
+    deadline = time.monotonic() + _PLAY_DRAIN_BUDGET_SECONDS
+    for _ in range(_PLAY_DRAIN_MAX_READS):
         since_seq = state.get("next_seq", 0) if state else 0
         previous = (
             (
@@ -436,7 +497,7 @@ def tool_play_eigendark(args: Mapping[str, Any]) -> dict[str, Any]:
         if state.get("your_turn") or state.get("match_status") == "complete":
             break
         current = (state.get("next_seq"), state.get("active_idx"), state.get("match_status"))
-        if current == previous:
+        if current == previous or time.monotonic() >= deadline:
             break
     return {**state, **created}
 

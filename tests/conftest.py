@@ -2,12 +2,14 @@ from __future__ import annotations
 
 import pytest
 
+from eigendark_agent_mcp import tools
 from eigendark_agent_mcp.runtime import CREDENTIALS
 
 
 @pytest.fixture(autouse=True)
 def isolated_credentials_and_environment(monkeypatch: pytest.MonkeyPatch):
     CREDENTIALS.reset()
+    tools._clear_shared_sandbox_key()
     for name in (
         "EIGENDARK_API_KEY",
         "ED_API_KEY",
@@ -24,3 +26,4 @@ def isolated_credentials_and_environment(monkeypatch: pytest.MonkeyPatch):
         monkeypatch.delenv(name, raising=False)
     yield
     CREDENTIALS.reset()
+    tools._clear_shared_sandbox_key()
