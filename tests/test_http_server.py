@@ -142,6 +142,46 @@ def test_streamable_http_calls_with_session_context_and_sanitizes_failures(
         assert "private internal detail" not in text
 
 
+def test_public_endpoint_bypasses_mtls_and_serves_same_tools() -> None:
+    # /mcp/public admits clients without the OpenAI connector certificate even
+    # when the /mcp gate is enforced, and lists the identical public toolset.
+    app = http_server.create_http_app(require_openai_mtls=True)
+    with TestClient(app, base_url="http://localhost") as client:
+        headers = {"Accept": "application/json, text/event-stream"}
+        response = client.post(
+            "/mcp/public",
+            headers=headers,
+            json={
+                "jsonrpc": "2.0",
+                "id": 1,
+                "method": "initialize",
+                "params": {
+                    "protocolVersion": "2025-11-25",
+                    "capabilities": {},
+                    "clientInfo": {"name": "connector-test", "version": "1"},
+                },
+            },
+        )
+        assert response.status_code == 200
+        assert response.json()["result"]["serverInfo"]["name"] == "eigendark"
+        session_headers = {**headers, "mcp-session-id": response.headers["mcp-session-id"]}
+        listed = client.post(
+            "/mcp/public",
+            headers=session_headers,
+            json={"jsonrpc": "2.0", "id": 2, "method": "tools/list", "params": {}},
+        )
+        assert listed.status_code == 200
+        names = {tool["name"] for tool in listed.json()["result"]["tools"]}
+        assert "play_eigendark" in names
+        # The certificate gate on /mcp itself still holds.
+        gated = client.post(
+            "/mcp",
+            headers=headers,
+            json={"jsonrpc": "2.0", "id": 3, "method": "initialize", "params": {}},
+        )
+        assert gated.status_code == 403
+
+
 def test_mtls_gate_requires_verified_expected_client_certificate() -> None:
     app = http_server.create_http_app(require_openai_mtls=True)
     with TestClient(app, base_url="http://localhost") as client:
