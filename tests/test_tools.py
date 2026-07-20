@@ -245,6 +245,40 @@ def test_onboarding_rejects_parallel_cpu_work():
         tools._ONBOARD_LOCK.release()
 
 
+def test_shared_sandbox_key_reused_across_sessions(monkeypatch: pytest.MonkeyPatch):
+    # Two cold play_eigendark calls from DIFFERENT sessions must mint the
+    # sandbox key only ONCE — onboarding volume is decoupled from session
+    # count, so all traffic behind the single VPS egress IP can't exhaust the
+    # website's per-IP mint cap. Seat tokens still come per match/session.
+    from eigendark_agent_mcp.runtime import CredentialStore, credential_scope
+
+    onboards = 0
+
+    def fake_request(method, path, *, body=None, bearer=None):
+        nonlocal onboards
+        if path.endswith("/challenge"):
+            return {
+                "challenge_id": "shared-challenge",
+                "reception_protocol": {"zone_from": 6, "cost": 1},
+                "proof_of_work": {"algorithm": "sha256", "difficulty": 1},
+            }
+        if path == "/api/agent/onboard":
+            onboards += 1
+            return {"api_key": "api_shared_key", "tier": "sandbox", "limits": {}}
+        if path.endswith("/create-bot"):
+            assert bearer == "api_shared_key"
+            return {"match_id": "M-shared", "seat": 0, "token": "seat_tok"}
+        return {"match_id": "M-shared", "match_status": "complete", "your_turn": False, "next_seq": 1}
+
+    monkeypatch.setattr(tools, "json_request", fake_request)
+
+    for _ in range(3):
+        with credential_scope(CredentialStore()):  # a fresh per-session store
+            tools.invoke_tool("play_eigendark", {})
+
+    assert onboards == 1  # minted once, reused across all three sessions
+
+
 def test_pow_and_zone_solver():
     challenge_id = "a" * 32
     nonce = tools.solve_pow(challenge_id, 2)

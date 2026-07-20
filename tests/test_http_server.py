@@ -145,8 +145,10 @@ def test_streamable_http_calls_with_session_context_and_sanitizes_failures(
 def test_public_endpoint_bypasses_mtls_and_serves_same_tools() -> None:
     # /mcp/public admits clients without the OpenAI connector certificate even
     # when the /mcp gate is enforced, and lists the identical public toolset.
+    # In mtls (production) mode loopback hosts are dropped from the allowlist,
+    # so connect with the production Host the way nginx forwards it.
     app = http_server.create_http_app(require_openai_mtls=True)
-    with TestClient(app, base_url="http://localhost") as client:
+    with TestClient(app, base_url="http://api.eigendark.com") as client:
         headers = {"Accept": "application/json, text/event-stream"}
         response = client.post(
             "/mcp/public",

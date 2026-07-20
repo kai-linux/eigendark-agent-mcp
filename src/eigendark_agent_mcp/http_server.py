@@ -89,10 +89,13 @@ def create_public_mcp_server(
     ) -> dict[str, Any] | types.CallToolResult:
         if not isinstance(arguments, Mapping):
             return _error_result("Tool arguments must be an object")
-        try:
-            session = request_ctx.get().session
-            store = registry.for_session(session)
-            with credential_scope(store):
+        session = request_ctx.get().session
+        store = registry.for_session(session)
+        # Keep the credential scope active around error handling too, so
+        # _error_result -> redact_text scrubs this session's own secret values
+        # (not just the prefix/bearer regexes) even on the failure path.
+        with credential_scope(store):
+            try:
                 return await anyio.to_thread.run_sync(
                     invoke_tool,
                     name,
@@ -100,10 +103,10 @@ def create_public_mcp_server(
                     abandon_on_cancel=False,
                     limiter=limiter,
                 )
-        except ToolError as exc:
-            return _error_result(str(exc))
-        except Exception:
-            return _error_result("The tool failed safely; no internal detail was returned")
+            except ToolError as exc:
+                return _error_result(str(exc))
+            except Exception:
+                return _error_result("The tool failed safely; no internal detail was returned")
 
     return server
 
@@ -259,15 +262,18 @@ def create_http_app(*, require_openai_mtls: bool | None = None) -> ASGIApp:
         require_openai_mtls = os.environ.get("EIGENDARK_MCP_REQUIRE_OPENAI_MTLS") == "1"
     registry = SessionCredentialRegistry()
     mcp_server = create_public_mcp_server(registry)
+    # In production (mTLS mode) nginx pins Host to api.eigendark.com, so the
+    # loopback host entries grant nothing and are dropped; they remain only
+    # for local/dev runs (and the test harness) that connect via localhost.
+    loopback_hosts = [] if require_openai_mtls else [
+        "localhost",
+        "localhost:*",
+        "127.0.0.1",
+        "127.0.0.1:*",
+    ]
     security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[
-            "api.eigendark.com",
-            "localhost",
-            "localhost:*",
-            "127.0.0.1",
-            "127.0.0.1:*",
-        ],
+        allowed_hosts=["api.eigendark.com", *loopback_hosts],
         allowed_origins=["https://chatgpt.com", "https://chat.openai.com"],
     )
     manager = BoundedSessionManager(
@@ -284,13 +290,7 @@ def create_http_app(*, require_openai_mtls: bool | None = None) -> ASGIApp:
     # mTLS middleware deliberately guards only /mcp.
     public_security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
-        allowed_hosts=[
-            "api.eigendark.com",
-            "localhost",
-            "localhost:*",
-            "127.0.0.1",
-            "127.0.0.1:*",
-        ],
+        allowed_hosts=["api.eigendark.com", *loopback_hosts],
         allowed_origins=[
             "https://claude.ai",
             "https://chatgpt.com",
