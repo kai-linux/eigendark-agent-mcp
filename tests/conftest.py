@@ -22,6 +22,8 @@ def isolated_credentials_and_environment(monkeypatch: pytest.MonkeyPatch):
         "EIGENDARK_MCP_ALLOW_UNTRUSTED_BASE_URL",
         "EIGENDARK_MCP_HTTP_PORT",
         "EIGENDARK_MCP_REQUIRE_OPENAI_MTLS",
+        "EIGENDARK_GPT_ACTION_KEY",
+        "EIGENDARK_GPT_ACTION_REQUIRE_AUTH",
     ):
         monkeypatch.delenv(name, raising=False)
     yield

@@ -91,13 +91,20 @@ def _fake_action_tool(name: str, arguments: dict[str, object]) -> dict[str, obje
     }
 
 
-def test_openapi_schema_is_noauth_exact_and_action_safe() -> None:
+def test_openapi_schema_requires_builder_bearer_and_is_action_safe() -> None:
     schema = gpt_action.openapi_schema()
 
     assert schema["openapi"] == "3.1.0"
     assert schema["servers"] == [{"url": "https://api.eigendark.com"}]
     assert schema["externalDocs"]["url"] == "https://www.eigendark.com/privacy-policy"
     assert schema["info"]["version"] == "1.1.0"
+    assert schema["components"]["securitySchemes"] == {
+        "GPTActionBearer": {
+            "type": "http",
+            "scheme": "bearer",
+            "description": "Builder-managed Action credential. End users do not configure it.",
+        }
+    }
     operations = {path: document["post"] for path, document in schema["paths"].items()}
     assert set(operations) == {"/gpt/play", "/gpt/game", "/gpt/turn"}
     assert {operation["operationId"] for operation in operations.values()} == {
@@ -105,7 +112,9 @@ def test_openapi_schema_is_noauth_exact_and_action_safe() -> None:
         "getEigendarkGame",
         "takeEigendarkTurn",
     }
-    assert all(operation["security"] == [] for operation in operations.values())
+    assert all(
+        operation["security"] == [{"GPTActionBearer": []}] for operation in operations.values()
+    )
     assert all(operation["x-openai-isConsequential"] is False for operation in operations.values())
     for operation in operations.values():
         response = operation["responses"]["200"]["content"]["application/json"]["schema"]

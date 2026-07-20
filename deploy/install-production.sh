@@ -9,6 +9,8 @@ RUNTIME_PREVIOUS=/opt/eigendark-agent-mcp.previous
 PYTHON_INSTALL_ROOT=/opt/eigendark-python
 OPENAI_CA_DIR=/etc/nginx/openai-connectors
 OPENAI_ACTIONS_IP_DIR=/etc/nginx/openai-actions
+GPT_ACTION_CONFIG_DIR=/etc/eigendark-agent-mcp
+GPT_ACTION_ENV_FILE=$GPT_ACTION_CONFIG_DIR/gpt-action.env
 
 cd "$ROOT"
 test -x "$SOURCE_PYTHON"
@@ -99,6 +101,17 @@ sudo install -d -m 0755 "$OPENAI_CA_DIR"
 sudo install -m 0644 "$tmpdir/client-ca.pem" "$OPENAI_CA_DIR/client-ca.pem"
 sudo install -d -m 0755 "$OPENAI_ACTIONS_IP_DIR"
 sudo install -m 0644 "$tmpdir/client-ips.conf" "$OPENAI_ACTIONS_IP_DIR/client-ips.conf"
+sudo install -d -m 0700 -o root -g root "$GPT_ACTION_CONFIG_DIR"
+if ! sudo test -s "$GPT_ACTION_ENV_FILE"; then
+    umask 077
+    "$python" - <<'PY' > "$tmpdir/gpt-action.env"
+import secrets
+
+print(f"EIGENDARK_GPT_ACTION_KEY={secrets.token_hex(32)}")
+PY
+    sudo install -m 0600 -o root -g root "$tmpdir/gpt-action.env" "$GPT_ACTION_ENV_FILE"
+fi
+sudo grep -Eq '^EIGENDARK_GPT_ACTION_KEY=[a-f0-9]{64}$' "$GPT_ACTION_ENV_FILE"
 sudo install -m 0644 deploy/eigendark-agent-mcp.service \
     /etc/systemd/system/eigendark-agent-mcp.service
 sudo install -m 0644 deploy/api.eigendark.nginx.conf \

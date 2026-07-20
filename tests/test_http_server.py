@@ -4,6 +4,7 @@ import json
 import urllib.parse
 from datetime import UTC, datetime, timedelta
 
+import anyio
 import pytest
 from cryptography import x509
 from cryptography.hazmat.primitives import hashes, serialization
@@ -184,6 +185,136 @@ def test_public_endpoint_bypasses_mtls_and_serves_same_tools() -> None:
         assert gated.status_code == 403
 
 
+def test_public_endpoint_caps_sessions_per_trusted_client(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    monkeypatch.setattr(http_server, "MAX_PUBLIC_HTTP_SESSIONS_PER_CLIENT", 1)
+    app = http_server.create_http_app(require_openai_mtls=False)
+    request = {
+        "jsonrpc": "2.0",
+        "id": 1,
+        "method": "initialize",
+        "params": {
+            "protocolVersion": "2025-11-25",
+            "capabilities": {},
+            "clientInfo": {"name": "session-cap-test", "version": "1"},
+        },
+    }
+    headers = {
+        "Accept": "application/json, text/event-stream",
+        "x-real-ip": "203.0.113.8",
+    }
+    with TestClient(app, base_url="http://localhost") as client:
+        first = client.post("/mcp/public", headers=headers, json=request)
+        second = client.post("/mcp/public", headers=headers, json=request)
+
+    assert first.status_code == 200
+    assert second.status_code == 503
+    assert second.headers["retry-after"] == "30"
+    assert second.json() == {"error": "Eigendark is at temporary session capacity"}
+
+
+def test_session_admission_reserves_capacity_before_first_await(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    started = anyio.Event()
+    release = anyio.Event()
+
+    async def delayed_create(manager, scope, receive, send):
+        started.set()
+        await release.wait()
+        manager._server_instances["created-session"] = object()
+        await send(
+            {
+                "type": "http.response.start",
+                "status": 200,
+                "headers": [(b"mcp-session-id", b"created-session")],
+            }
+        )
+        await send({"type": "http.response.body", "body": b"{}"})
+
+    monkeypatch.setattr(
+        http_server.StreamableHTTPSessionManager,
+        "handle_request",
+        delayed_create,
+    )
+    manager = http_server.BoundedSessionManager(
+        app=object(),
+        max_sessions=1,
+        max_sessions_per_client=1,
+    )
+    scope = {
+        "type": "http",
+        "method": "POST",
+        "path": "/mcp/public",
+        "headers": [(b"x-real-ip", b"203.0.113.8")],
+        "client": ("127.0.0.1", 1234),
+    }
+
+    async def receive():
+        return {"type": "http.disconnect"}
+
+    first_messages = []
+    second_messages = []
+
+    async def send_first(message):
+        first_messages.append(message)
+
+    async def send_second(message):
+        second_messages.append(message)
+
+    async def scenario() -> None:
+        async with anyio.create_task_group() as group:
+            group.start_soon(manager.handle_request, scope, receive, send_first)
+            await started.wait()
+            await manager.handle_request(scope, receive, send_second)
+            release.set()
+
+    anyio.run(scenario)
+
+    assert second_messages[0]["status"] == 503
+    assert first_messages[0]["status"] == 200
+    assert manager._pending_new_sessions == 0
+    assert manager._session_clients == {"created-session": "203.0.113.8"}
+
+
+def test_gpt_actions_require_constant_time_builder_bearer(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    secret = "a" * 64
+    monkeypatch.setenv("EIGENDARK_GPT_ACTION_KEY", secret)
+    app = http_server.create_http_app(
+        require_openai_mtls=False,
+        require_gpt_action_auth=True,
+    )
+    with TestClient(app, base_url="http://localhost") as client:
+        assert client.get("/gpt/openapi.json").status_code == 200
+        missing = client.post("/gpt/play", json={})
+        wrong = client.post(
+            "/gpt/play",
+            headers={"Authorization": f"Bearer {'b' * 64}"},
+            json={},
+        )
+        authenticated = client.post(
+            "/gpt/play",
+            headers={"Authorization": f"bearer {secret}"},
+            json={"unexpected": True},
+        )
+
+    assert missing.status_code == 401
+    assert missing.headers["www-authenticate"] == "Bearer"
+    assert wrong.status_code == 401
+    assert secret not in missing.text + wrong.text
+    assert authenticated.status_code == 400
+
+    monkeypatch.delenv("EIGENDARK_GPT_ACTION_KEY")
+    with pytest.raises(RuntimeError, match="no key is configured"):
+        http_server.create_http_app(
+            require_openai_mtls=False,
+            require_gpt_action_auth=True,
+        )
+
+
 def test_mtls_gate_requires_verified_expected_client_certificate() -> None:
     app = http_server.create_http_app(require_openai_mtls=True)
     with TestClient(app, base_url="http://localhost") as client:
@@ -225,6 +356,13 @@ def test_invalid_certificates_body_limit_and_shared_credentials_are_rejected(
     ) as client:
         too_large = client.post("/mcp", content=b"0123456789")
     assert too_large.status_code == 413
+
+    monkeypatch.setattr(http_server, "MAX_GPT_ACTION_BODY_BYTES", 8)
+    with TestClient(
+        http_server.create_http_app(require_openai_mtls=False), base_url="http://localhost"
+    ) as client:
+        action_too_large = client.post("/gpt/play", content=b'{"value":"too large"}')
+    assert action_too_large.status_code == 413
 
     monkeypatch.setenv("EIGENDARK_API_KEY", "api_process_wide_secret")
     with pytest.raises(RuntimeError, match="refuses process-wide"):

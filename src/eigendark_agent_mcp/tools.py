@@ -6,8 +6,11 @@ import contextlib
 import hashlib
 import json
 import logging
+import math
 import os
 import secrets
+import stat
+import tempfile
 import threading
 import time
 import urllib.parse
@@ -391,16 +394,35 @@ def _load_shared_key_from_disk() -> tuple[str, float] | None:
     if not path:
         return None
     try:
-        with open(path, encoding="utf-8") as handle:
+        flags = os.O_RDONLY | getattr(os, "O_CLOEXEC", 0) | getattr(os, "O_NOFOLLOW", 0)
+        descriptor = os.open(path, flags)
+        with os.fdopen(descriptor, encoding="utf-8") as handle:
+            metadata = os.fstat(handle.fileno())
+            if (
+                not stat.S_ISREG(metadata.st_mode)
+                or metadata.st_uid != os.geteuid()
+                or metadata.st_mode & 0o077
+                or not 0 < metadata.st_size <= 8_192
+            ):
+                return None
             data = json.load(handle)
+            if not isinstance(data, Mapping):
+                return None
         api_key = data.get("api_key")
         minted_at = float(data.get("minted_at", 0))
-    except (OSError, ValueError, TypeError):
+    except (OSError, UnicodeError, ValueError, TypeError):
         return None
-    if not isinstance(api_key, str) or not api_key:
+    if (
+        not isinstance(api_key, str)
+        or not 1 <= len(api_key) <= 4_096
+        or any(not 33 <= ord(character) <= 126 for character in api_key)
+    ):
+        return None
+    now = time.time()
+    if not math.isfinite(minted_at) or minted_at <= 0 or minted_at > now + 300:
         return None
     expires_at = minted_at + _SHARED_KEY_TTL_SECONDS
-    if expires_at <= time.time():
+    if expires_at <= now:
         return None
     return api_key, expires_at
 
@@ -409,14 +431,32 @@ def _save_shared_key_to_disk(api_key: str) -> None:
     path = _shared_key_state_path()
     if not path:
         return
+    temporary_path: str | None = None
     try:
-        tmp = f"{path}.tmp"
-        with open(tmp, "w", encoding="utf-8") as handle:
+        directory = os.path.dirname(path)
+        descriptor, temporary_path = tempfile.mkstemp(
+            dir=directory,
+            prefix=".shared-sandbox-key.",
+            text=True,
+        )
+        with os.fdopen(descriptor, "w", encoding="utf-8") as handle:
+            os.fchmod(handle.fileno(), 0o600)
             json.dump({"api_key": api_key, "minted_at": time.time()}, handle)
-        os.replace(tmp, path)
-        os.chmod(path, 0o600)
+            handle.flush()
+            os.fsync(handle.fileno())
+        os.replace(temporary_path, path)
+        temporary_path = None
+        directory_descriptor = os.open(directory, os.O_RDONLY)
+        try:
+            os.fsync(directory_descriptor)
+        finally:
+            os.close(directory_descriptor)
     except OSError:
         pass  # in-memory cache still holds it; disk persistence is best-effort
+    finally:
+        if temporary_path:
+            with contextlib.suppress(OSError):
+                os.remove(temporary_path)
 
 
 def _clear_shared_sandbox_key() -> None:

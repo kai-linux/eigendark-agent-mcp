@@ -44,3 +44,11 @@ def test_custom_gpt_action_uses_validated_openai_egress_allowlist() -> None:
     assert "location = /gpt/openapi.json" in nginx
     assert "location = /gpt/play" in nginx
     assert "location ~ ^/gpt/(game|turn)$" in nginx
+    assert "EIGENDARK_GPT_ACTION_REQUIRE_AUTH=1" in (
+        ROOT / "deploy/eigendark-agent-mcp.service"
+    ).read_text(encoding="utf-8")
+    assert "EnvironmentFile=/etc/eigendark-agent-mcp/gpt-action.env" in (
+        ROOT / "deploy/eigendark-agent-mcp.service"
+    ).read_text(encoding="utf-8")
+    assert "secrets.token_hex(32)" in installer
+    assert "install -m 0600 -o root -g root" in installer

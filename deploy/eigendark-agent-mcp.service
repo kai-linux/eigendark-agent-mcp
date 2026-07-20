@@ -10,7 +10,9 @@ Group=bitnami
 WorkingDirectory=/
 Environment=PYTHONUNBUFFERED=1
 Environment=EIGENDARK_MCP_REQUIRE_OPENAI_MTLS=1
+Environment=EIGENDARK_GPT_ACTION_REQUIRE_AUTH=1
 Environment=EIGENDARK_MCP_HTTP_PORT=5003
+EnvironmentFile=/etc/eigendark-agent-mcp/gpt-action.env
 # Persist the process-shared sandbox key across restarts so a restart / crash
 # loop cannot re-mint and exhaust the website's per-IP daily onboarding budget.
 # systemd creates /var/lib/eigendark-agent-mcp (0700, service-owned) and sets
