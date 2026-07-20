@@ -131,6 +131,7 @@ class CredentialStore:
                 "ED_API_KEY",
                 "EIGENDARK_SEAT_TOKEN",
                 "ED_SEAT_TOKEN",
+                "EIGENDARK_GPT_ACTION_KEY",
             )
             if (value := os.environ.get(name))
         ]

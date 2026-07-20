@@ -341,7 +341,10 @@ def test_shared_sandbox_key_survives_restart_via_state_dir(
 
     with credential_scope(CredentialStore()):
         tools.invoke_tool("play_eigendark", {})
-    assert (tmp_path / "shared-sandbox-key.json").exists()
+    state_file = tmp_path / "shared-sandbox-key.json"
+    assert state_file.exists()
+    assert state_file.stat().st_mode & 0o777 == 0o600
+    assert not list(tmp_path.glob(".shared-sandbox-key.*"))
 
     # Simulate a restart: drop ONLY the in-memory cache, leave the disk file.
     tools._shared_sandbox_key = None
@@ -351,6 +354,52 @@ def test_shared_sandbox_key_survives_restart_via_state_dir(
         tools.invoke_tool("play_eigendark", {})
 
     assert onboards == 1  # reloaded from disk after "restart", not re-minted
+
+
+def test_shared_key_loader_rejects_insecure_or_symlinked_state(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+):
+    monkeypatch.setenv("EIGENDARK_MCP_STATE_DIR", str(tmp_path))
+    state_file = tmp_path / "shared-sandbox-key.json"
+    payload = json.dumps({"api_key": "api_private_key", "minted_at": tools.time.time()})
+    state_file.write_text(payload, encoding="utf-8")
+    state_file.chmod(0o644)
+    assert tools._load_shared_key_from_disk() is None
+
+    state_file.unlink()
+    target = tmp_path / "attacker-controlled.json"
+    target.write_text(payload, encoding="utf-8")
+    target.chmod(0o600)
+    state_file.symlink_to(target)
+    assert tools._load_shared_key_from_disk() is None
+
+
+def test_shared_key_loader_rejects_non_object_or_invalid_utf8_state(
+    monkeypatch: pytest.MonkeyPatch, tmp_path
+):
+    monkeypatch.setenv("EIGENDARK_MCP_STATE_DIR", str(tmp_path))
+    state_file = tmp_path / "shared-sandbox-key.json"
+    state_file.write_text("[]", encoding="utf-8")
+    state_file.chmod(0o600)
+    assert tools._load_shared_key_from_disk() is None
+
+    state_file.write_bytes(b"\xff\xfe")
+    state_file.chmod(0o600)
+    assert tools._load_shared_key_from_disk() is None
+
+    state_file.write_text(
+        json.dumps({"api_key": "api_private_key", "minted_at": float("nan")}),
+        encoding="utf-8",
+    )
+    state_file.chmod(0o600)
+    assert tools._load_shared_key_from_disk() is None
+
+    state_file.write_text(
+        json.dumps({"api_key": "api_private_key\nInjected", "minted_at": tools.time.time()}),
+        encoding="utf-8",
+    )
+    state_file.chmod(0o600)
+    assert tools._load_shared_key_from_disk() is None
 
 
 def test_pow_and_zone_solver():

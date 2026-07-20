@@ -16,7 +16,9 @@ API keys, matchmaking tickets, seat tokens, review keys, and spectator tokens
 are never MCP tool arguments or results. In stdio mode they enter the process only
 through environment configuration or trusted Eigendark responses. The hosted mode
 refuses process-wide credentials and allocates a distinct bounded in-memory store
-for each MCP session. Restarting the process clears all credentials.
+for each MCP session. Match capabilities are cleared on restart. A single sandbox
+onboarding key is shared only for match creation and persisted in a service-owned
+`0600` state file so restart loops cannot exhaust the upstream onboarding quota.
 
 Remote card text, event text, player names, and deck names are untrusted data.
 Every remote result is labeled accordingly, recursively sanitized, bounded, and
@@ -51,11 +53,12 @@ https://api.eigendark.com/mcp/public
   URL (the curated Eigendark app on `/mcp` remains the reviewed listing).
 - **IDE / other MCP clients:** add a `streamable-http` server with that URL.
 
-The hosted endpoint is anonymous by design: each session self-onboards a
-disposable sandbox identity server-side, plays rules-enforced starter decks
-against the house bot, and returns a public spectator link. Session, request,
-and body budgets are enforced at both nginx and the app; no credentials are
-ever accepted from or exposed to the client.
+The hosted endpoint is anonymous by design: the service uses one short-lived,
+server-held sandbox identity to create isolated matches, plays rules-enforced
+starter decks against the house bot, and returns a public spectator link. Match
+capabilities stay scoped to each protocol session. Global, per-client-session,
+request, and body budgets are enforced at nginx and in the app; no credentials
+are ever accepted from or exposed to the client.
 
 ## Install
 
@@ -149,9 +152,11 @@ ephemeral handle is erased immediately. The recovery/turn routes remain bounded 
 older running sessions.
 
 Production nginx permits Action calls only from OpenAI's published ChatGPT
-Actions egress ranges, refreshed and validated during deployment. The public
-schema remains readable for editor validation. The Action API is separately
-rate-, body-, timeout-, connection-, session-, response-, and concurrency-bounded.
+Actions egress ranges, refreshed and validated during deployment. Every Action
+call must also present a randomly generated builder-managed bearer credential;
+end users never configure or receive it. The public schema remains readable for
+editor validation. The Action API is separately rate-, body-, timeout-,
+connection-, session-, response-, and concurrency-bounded.
 
 ## Play flow
 

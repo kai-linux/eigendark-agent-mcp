@@ -196,6 +196,17 @@ def openapi_schema() -> dict[str, Any]:
             "description": "Eigendark privacy policy",
             "url": GPT_ACTION_PRIVACY_URL,
         },
+        "components": {
+            "securitySchemes": {
+                "GPTActionBearer": {
+                    "type": "http",
+                    "scheme": "bearer",
+                    "description": (
+                        "Builder-managed Action credential. End users do not configure it."
+                    ),
+                }
+            }
+        },
         "paths": {
             GPT_ACTION_PLAY_PATH: {
                 "post": {
@@ -207,7 +218,7 @@ def openapi_schema() -> dict[str, Any]:
                         "The server_greedy_fallback, not ChatGPT, chooses delegated moves."
                     ),
                     "x-openai-isConsequential": False,
-                    "security": [],
+                    "security": [{"GPTActionBearer": []}],
                     "responses": responses("Terminal game result and live/replay link."),
                 }
             },
@@ -220,7 +231,7 @@ def openapi_schema() -> dict[str, Any]:
                         "GPT. Use only to recover missing or stale state."
                     ),
                     "x-openai-isConsequential": False,
-                    "security": [],
+                    "security": [{"GPTActionBearer": []}],
                     "requestBody": {
                         "required": True,
                         "content": {
@@ -239,7 +250,7 @@ def openapi_schema() -> dict[str, Any]:
                         "legal_actions, then returns the next seat-redacted state."
                     ),
                     "x-openai-isConsequential": False,
-                    "security": [],
+                    "security": [{"GPTActionBearer": []}],
                     "requestBody": {
                         "required": True,
                         "content": {
