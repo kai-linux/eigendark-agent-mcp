@@ -72,6 +72,11 @@ def test_openapi_schema_is_noauth_exact_and_action_safe() -> None:
     }
     assert all(operation["security"] == [] for operation in operations.values())
     assert all(operation["x-openai-isConsequential"] is False for operation in operations.values())
+    for operation in operations.values():
+        response = operation["responses"]["200"]["content"]["application/json"]["schema"]
+        assert {"game_id", "human_url", "match_status", "legal_actions"}.issubset(
+            response["properties"]
+        )
 
     turn = operations["/gpt/turn"]["requestBody"]["content"]["application/json"]["schema"]
     assert set(turn["required"]) == {"game_id", "kind"}
