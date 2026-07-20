@@ -60,7 +60,7 @@ def test_cold_play_onboards_creates_match_and_returns_live_link(monkeypatch: pyt
             return {"api_key": api_key, "tier": "sandbox", "limits": {"rate_per_min": 6}}
         if path.endswith("/create-bot"):
             assert bearer == api_key
-            assert str(body["agent_id"]).startswith("chatgpt-")
+            assert str(body["agent_id"]).startswith("delegated-")
             return {
                 "match_id": "M-cold",
                 "seat": 0,
@@ -70,30 +70,27 @@ def test_cold_play_onboards_creates_match_and_returns_live_link(monkeypatch: pyt
                     "human_url": ("https://www.eigendark.com/play?agent_match=M-cold&share=sh_cold")
                 },
             }
-        assert path.endswith("/M-cold/state")
-        state_call = sum(call_path.endswith("/M-cold/state") for _, call_path, _, _ in calls)
+        assert path.endswith("/M-cold/autoplay")
         assert body == {
             "seat": 0,
             "token": seat_token,
-            "advance_bot": True,
-            "since_seq": 0 if state_call == 1 else 10,
+            "since_seq": 2_147_483_647,
         }
-        if state_call == 1:
-            return {
-                "match_id": "M-cold",
-                "match_status": "running",
-                "active_idx": 1,
-                "your_turn": False,
-                "next_seq": 10,
-                "legal_actions": [],
-            }
         return {
             "match_id": "M-cold",
-            "match_status": "running",
+            "match_status": "complete",
             "active_idx": 0,
-            "your_turn": True,
-            "next_seq": 12,
-            "legal_actions": [{"kind": "pass", "args": {}}],
+            "your_turn": False,
+            "next_seq": 91,
+            "legal_actions": [],
+            "winner": "A-delegated",
+            "win_condition": "souls",
+            "autoplay": {
+                "controller": "server_greedy_fallback",
+                "viewer_actions": 13,
+                "house_bot_actions": 12,
+                "safety_stop": False,
+            },
             "token": seat_token,
         }
 
@@ -102,15 +99,40 @@ def test_cold_play_onboards_creates_match_and_returns_live_link(monkeypatch: pyt
 
     assert result["match_id"] == "M-cold"
     assert result["human_url"].endswith("agent_match=M-cold&share=sh_cold")
-    assert result["legal_actions"] == [{"kind": "pass", "args": {}}]
+    assert result["match_status"] == "complete"
+    assert result["winner"] == "A-delegated"
+    assert result["terminal_result_authoritative"] is True
+    assert result["autoplay"]["controller"] == "server_greedy_fallback"
+    assert result["legal_actions"] == []
     no_secrets(result, api_key, seat_token, spectator_token)
     assert [path for _, path, _, _ in calls] == [
         "/api/agent/onboard/challenge",
         "/api/agent/onboard",
         "/api/agent/match/create-bot",
-        "/api/agent/match/M-cold/state",
-        "/api/agent/match/M-cold/state",
+        "/api/agent/match/M-cold/autoplay",
     ]
+
+
+def test_cold_play_refuses_to_return_a_running_result(monkeypatch: pytest.MonkeyPatch):
+    CREDENTIALS.remember_api_key("api_private")
+    CREDENTIALS.remember_match("M-running", 0, "seat_private", "watch_private")
+    monkeypatch.setattr(
+        tools,
+        "tool_create_bot_match",
+        lambda _args: {
+            "match_id": "M-running",
+            "seat": 0,
+            "human_url": "https://eigendark.com/play",
+        },
+    )
+    monkeypatch.setattr(
+        tools,
+        "json_request",
+        lambda *_args, **_kwargs: {"match_id": "M-running", "match_status": "running"},
+    )
+
+    with pytest.raises(ToolError, match="authoritative terminal"):
+        tools.invoke_tool("play_eigendark", {})
 
 
 def test_public_turn_drives_house_bot_and_hides_pacing_control(monkeypatch: pytest.MonkeyPatch):

@@ -12,6 +12,38 @@ from eigendark_agent_mcp.runtime import CredentialStore, credentials
 from eigendark_agent_mcp.tools import invoke_tool
 
 
+def _fake_terminal_action_tool(name: str, arguments: dict[str, object]) -> dict[str, object]:
+    assert name == "play_eigendark"
+    assert arguments == {}
+    store = credentials()
+    store.remember_api_key("api_private_terminal_credential")
+    store.remember_match(
+        "M-terminal",
+        0,
+        "seat_private_match_credential",
+        "spectator_private_credential",
+    )
+    return {
+        "match_id": "M-terminal",
+        "seat": 0,
+        "match_status": "complete",
+        "winner": "A-delegated",
+        "win_condition": "souls",
+        "your_turn": False,
+        "next_seq": 87,
+        "legal_actions": [],
+        "autoplay": {
+            "controller": "server_greedy_fallback",
+            "viewer_actions": 12,
+            "house_bot_actions": 11,
+            "safety_stop": False,
+        },
+        "terminal_result_authoritative": True,
+        "human_url": "https://www.eigendark.com/play?agent_match=M-terminal&share=sh_public",
+        "security_notice": "safe",
+    }
+
+
 def _fake_action_tool(name: str, arguments: dict[str, object]) -> dict[str, object]:
     if name == "play_eigendark":
         store = credentials()
@@ -65,6 +97,7 @@ def test_openapi_schema_is_noauth_exact_and_action_safe() -> None:
     assert schema["openapi"] == "3.1.0"
     assert schema["servers"] == [{"url": "https://api.eigendark.com"}]
     assert schema["externalDocs"]["url"] == "https://www.eigendark.com/privacy-policy"
+    assert schema["info"]["version"] == "1.1.0"
     operations = {path: document["post"] for path, document in schema["paths"].items()}
     assert set(operations) == {"/gpt/play", "/gpt/game", "/gpt/turn"}
     assert {operation["operationId"] for operation in operations.values()} == {
@@ -92,6 +125,40 @@ def test_openapi_schema_is_noauth_exact_and_action_safe() -> None:
     }
     assert {"match_id", "seat", "since_seq", "api_key", "token"}.isdisjoint(turn["properties"])
     assert turn["additionalProperties"] is False
+
+
+def test_custom_gpt_play_is_one_call_and_closes_its_terminal_handle(
+    monkeypatch: pytest.MonkeyPatch,
+) -> None:
+    calls = []
+
+    def fake(name: str, arguments: dict[str, object]) -> dict[str, object]:
+        calls.append((name, arguments))
+        return _fake_terminal_action_tool(name, arguments)
+
+    monkeypatch.setattr(gpt_action, "invoke_tool", fake)
+    secrets = (
+        "api_private_terminal_credential",
+        "seat_private_match_credential",
+        "spectator_private_credential",
+    )
+
+    with TestClient(
+        http_server.create_http_app(require_openai_mtls=False), base_url="http://localhost"
+    ) as client:
+        response = client.post("/gpt/play", json={})
+        result = response.json()
+        expired = client.post("/gpt/game", json={"game_id": result["game_id"]})
+
+    assert response.status_code == 200
+    assert calls == [("play_eigendark", {})]
+    assert result["match_status"] == "complete"
+    assert result["winner"] == "A-delegated"
+    assert result["terminal_result_authoritative"] is True
+    assert result["autoplay"]["controller"] == "server_greedy_fallback"
+    assert result["human_url"].endswith("agent_match=M-terminal&share=sh_public")
+    assert all(secret not in response.text for secret in secrets)
+    assert expired.status_code == 404
 
 
 def test_custom_gpt_action_keeps_credentials_in_memory_and_closes_completed_game(
