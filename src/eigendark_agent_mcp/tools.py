@@ -2,8 +2,11 @@
 
 from __future__ import annotations
 
+import contextlib
 import hashlib
+import json
 import logging
+import os
 import secrets
 import threading
 import time
@@ -369,31 +372,86 @@ def _mint_sandbox_key(name: str | None = None) -> Mapping[str, Any]:
 _SHARED_KEY_LOCK = threading.Lock()
 _SHARED_KEY_TTL_SECONDS = 6 * 24 * 60 * 60
 _shared_sandbox_key: str | None = None
-_shared_sandbox_key_refresh_at: float = 0.0
+_shared_sandbox_key_expires_at: float = 0.0  # wall-clock epoch
+
+
+def _shared_key_state_path() -> str | None:
+    # Persist across restarts so a service restart / crash loop does not re-mint
+    # (each mint spends the website's scarce per-IP daily budget). Uses the
+    # systemd StateDirectory when present; falls back to in-memory only (tests,
+    # dev, stdio) when no writable state dir is configured.
+    state_dir = os.environ.get("EIGENDARK_MCP_STATE_DIR") or os.environ.get("STATE_DIRECTORY")
+    if not state_dir:
+        return None
+    return os.path.join(state_dir.split(":")[0], "shared-sandbox-key.json")
+
+
+def _load_shared_key_from_disk() -> tuple[str, float] | None:
+    path = _shared_key_state_path()
+    if not path:
+        return None
+    try:
+        with open(path, encoding="utf-8") as handle:
+            data = json.load(handle)
+        api_key = data.get("api_key")
+        minted_at = float(data.get("minted_at", 0))
+    except (OSError, ValueError, TypeError):
+        return None
+    if not isinstance(api_key, str) or not api_key:
+        return None
+    expires_at = minted_at + _SHARED_KEY_TTL_SECONDS
+    if expires_at <= time.time():
+        return None
+    return api_key, expires_at
+
+
+def _save_shared_key_to_disk(api_key: str) -> None:
+    path = _shared_key_state_path()
+    if not path:
+        return
+    try:
+        tmp = f"{path}.tmp"
+        with open(tmp, "w", encoding="utf-8") as handle:
+            json.dump({"api_key": api_key, "minted_at": time.time()}, handle)
+        os.replace(tmp, path)
+        os.chmod(path, 0o600)
+    except OSError:
+        pass  # in-memory cache still holds it; disk persistence is best-effort
 
 
 def _clear_shared_sandbox_key() -> None:
-    global _shared_sandbox_key, _shared_sandbox_key_refresh_at
+    global _shared_sandbox_key, _shared_sandbox_key_expires_at
     with _SHARED_KEY_LOCK:
         _shared_sandbox_key = None
-        _shared_sandbox_key_refresh_at = 0.0
+        _shared_sandbox_key_expires_at = 0.0
+        path = _shared_key_state_path()
+        if path:
+            with contextlib.suppress(OSError):
+                os.remove(path)
 
 
 def _ensure_shared_sandbox_key(store) -> None:
     """Populate the session store's api key from the shared cache, minting a
-    fresh shared key only when none is cached or the cached one is stale."""
-    global _shared_sandbox_key, _shared_sandbox_key_refresh_at
+    fresh shared key only when none is cached (in memory or on disk) or the
+    cached one is stale."""
+    global _shared_sandbox_key, _shared_sandbox_key_expires_at
     if store.api_key() is not None:
         return
     with _SHARED_KEY_LOCK:
-        now = time.monotonic()
-        if _shared_sandbox_key is not None and now < _shared_sandbox_key_refresh_at:
+        now = time.time()
+        if _shared_sandbox_key is not None and now < _shared_sandbox_key_expires_at:
+            store.remember_api_key(_shared_sandbox_key)
+            return
+        from_disk = _load_shared_key_from_disk()
+        if from_disk is not None:
+            _shared_sandbox_key, _shared_sandbox_key_expires_at = from_disk
             store.remember_api_key(_shared_sandbox_key)
             return
         minted = _mint_sandbox_key("Eigendark Public MCP")
         api_key = _required_service_string(minted, "api_key", max_length=4096)
         _shared_sandbox_key = api_key
-        _shared_sandbox_key_refresh_at = now + _SHARED_KEY_TTL_SECONDS
+        _shared_sandbox_key_expires_at = now + _SHARED_KEY_TTL_SECONDS
+        _save_shared_key_to_disk(api_key)
         store.remember_api_key(api_key)
 
 
