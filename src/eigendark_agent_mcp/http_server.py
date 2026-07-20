@@ -65,11 +65,16 @@ def _error_result(message: str) -> types.CallToolResult:
     )
 
 
-def create_public_mcp_server(registry: SessionCredentialRegistry) -> Server[Any, Any]:
+def create_public_mcp_server(
+    registry: SessionCredentialRegistry,
+    *,
+    name: str = HTTP_SERVER_NAME,
+    instructions: str = HTTP_SERVER_INSTRUCTIONS,
+) -> Server[Any, Any]:
     server: Server[Any, Any] = Server(
-        HTTP_SERVER_NAME,
+        name,
         version=__version__,
-        instructions=HTTP_SERVER_INSTRUCTIONS,
+        instructions=instructions,
         website_url="https://www.eigendark.com",
     )
     limiter = anyio.CapacityLimiter(8)
@@ -144,7 +149,7 @@ class BoundedRequestMiddleware:
             await self.app(scope, receive, send)
             return
         async with self._limiter:
-            bounded_paths = {"/mcp", "/gpt/play", "/gpt/game", "/gpt/turn"}
+            bounded_paths = {"/mcp", "/mcp/public", "/gpt/play", "/gpt/game", "/gpt/turn"}
             if scope.get("method") != "POST" or scope.get("path") not in bounded_paths:
                 await self.app(scope, receive, send)
                 return
@@ -272,16 +277,47 @@ def create_http_app(*, require_openai_mtls: bool | None = None) -> ASGIApp:
         security_settings=security,
         session_idle_timeout=HTTP_SESSION_IDLE_SECONDS,
     )
+    # /mcp/public is the connector endpoint for any MCP client (claude.ai
+    # custom connectors, ChatGPT developer mode, IDEs). Same tools and bounds;
+    # origin checks admit the major chat surfaces while server-side connector
+    # clients (which send no Origin) pass the host allowlist alone. The OpenAI
+    # mTLS middleware deliberately guards only /mcp.
+    public_security = TransportSecuritySettings(
+        enable_dns_rebinding_protection=True,
+        allowed_hosts=[
+            "api.eigendark.com",
+            "localhost",
+            "localhost:*",
+            "127.0.0.1",
+            "127.0.0.1:*",
+        ],
+        allowed_origins=[
+            "https://claude.ai",
+            "https://chatgpt.com",
+            "https://chat.openai.com",
+        ],
+    )
+    public_server = create_public_mcp_server(
+        registry, name="eigendark", instructions=HTTP_SERVER_INSTRUCTIONS
+    )
+    public_manager = BoundedSessionManager(
+        app=public_server,
+        json_response=True,
+        stateless=False,
+        security_settings=public_security,
+        session_idle_timeout=HTTP_SESSION_IDLE_SECONDS,
+    )
     action_service = GPTActionService()
 
     @asynccontextmanager
     async def lifespan(_: Starlette):
-        async with manager.run():
+        async with manager.run(), public_manager.run():
             yield
 
     app: ASGIApp = Starlette(
         routes=[
             Route("/mcp", endpoint=MCPASGIApp(manager)),
+            Route("/mcp/public", endpoint=MCPASGIApp(public_manager)),
             *action_service.routes(),
             Route("/healthz", health),
         ],

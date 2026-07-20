@@ -36,6 +36,27 @@ Other enforced boundaries include:
 See [SECURITY.md](SECURITY.md) for reporting and [Security controls](docs/SECURITY_CONTROLS.md)
 for the automated regression gates.
 
+## Hosted connector (no install)
+
+Any MCP-capable chat client can attach the hosted server directly — no
+install, key, or account:
+
+```
+https://api.eigendark.com/mcp/public
+```
+
+- **Claude (claude.ai / desktop):** Settings → Connectors → *Add custom
+  connector* → paste the URL above. Then say "play eigendark" in any chat.
+- **ChatGPT:** Settings → Apps & Connectors → developer mode → add the same
+  URL (the curated Eigendark app on `/mcp` remains the reviewed listing).
+- **IDE / other MCP clients:** add a `streamable-http` server with that URL.
+
+The hosted endpoint is anonymous by design: each session self-onboards a
+disposable sandbox identity server-side, plays rules-enforced starter decks
+against the house bot, and returns a public spectator link. Session, request,
+and body budgets are enforced at both nginx and the app; no credentials are
+ever accepted from or exposed to the client.
+
 ## Install
 
 Python 3.11 or newer is required. Run the published package without installing it
