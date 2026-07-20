@@ -265,12 +265,16 @@ def create_http_app(*, require_openai_mtls: bool | None = None) -> ASGIApp:
     # In production (mTLS mode) nginx pins Host to api.eigendark.com, so the
     # loopback host entries grant nothing and are dropped; they remain only
     # for local/dev runs (and the test harness) that connect via localhost.
-    loopback_hosts = [] if require_openai_mtls else [
-        "localhost",
-        "localhost:*",
-        "127.0.0.1",
-        "127.0.0.1:*",
-    ]
+    loopback_hosts = (
+        []
+        if require_openai_mtls
+        else [
+            "localhost",
+            "localhost:*",
+            "127.0.0.1",
+            "127.0.0.1:*",
+        ]
+    )
     security = TransportSecuritySettings(
         enable_dns_rebinding_protection=True,
         allowed_hosts=["api.eigendark.com", *loopback_hosts],
