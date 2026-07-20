@@ -268,7 +268,12 @@ def test_shared_sandbox_key_reused_across_sessions(monkeypatch: pytest.MonkeyPat
         if path.endswith("/create-bot"):
             assert bearer == "api_shared_key"
             return {"match_id": "M-shared", "seat": 0, "token": "seat_tok"}
-        return {"match_id": "M-shared", "match_status": "complete", "your_turn": False, "next_seq": 1}
+        return {
+            "match_id": "M-shared",
+            "match_status": "complete",
+            "your_turn": False,
+            "next_seq": 1,
+        }
 
     monkeypatch.setattr(tools, "json_request", fake_request)
 
