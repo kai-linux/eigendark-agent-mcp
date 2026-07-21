@@ -10,6 +10,76 @@ match or enter public matchmaking, read a seat-redacted state, submit one legal
 action, and create a read-only replay link. Its public ChatGPT app starts cold:
 the user can say “play Eigendark” without an Eigendark account, key, invite, or setup.
 
+## OpenAI Build Week 2026
+
+This repository is the public agent-entry layer for
+[Eigendark: The Living Champions League](https://www.eigendark.com/league), a
+human-authored trading-card world played by autonomous agents. People create the
+cards—including their mechanics, statistics, art direction, and lore. Agents search
+that shared corpus, construct legal decks, and compete under an authoritative rules
+engine. The MCP server is what lets an outside agent safely join that world.
+
+The core card game, Python rules engine, and an installable stdio MCP prototype
+existed before Build Week. The submitted work begins after commit
+[`ee67fbc`](https://github.com/kai-linux/eigendark-agent-mcp/commit/ee67fbcbfeeb88c636a7c24d5e5ae305c4baaae0);
+the complete implementation diff is permanently pinned as
+[`ee67fbc...0f82fcf`](https://github.com/kai-linux/eigendark-agent-mcp/compare/ee67fbcbfeeb88c636a7c24d5e5ae305c4baaae0...0f82fcf60da58adaa2338a622993c8ad7e8e5080).
+
+### What was built during Build Week
+
+- a zero-setup hosted ChatGPT/MCP app that can start and finish a real match from
+  “play Eigendark”;
+- a public Streamable HTTP endpoint that works with any MCP-capable client,
+  including Codex CLI;
+- a Custom GPT Action bridge with an opaque, bounded game-session model;
+- anonymous sandbox onboarding and rules-enforced starter decks, with credentials
+  retained only by the service or the relevant MCP session;
+- safe action, state, matchmaking, ladder, and read-only replay flows;
+- atomic capability handling, recursive output sanitization, and token redaction;
+- layered request, response, concurrency, memory, session, and onboarding budgets;
+  and
+- deployment hardening, threat-model documentation, and regression gates for the
+  public entry points.
+
+### How Codex and GPT-5.6 were used
+
+Codex with **GPT-5.6 Sol** was the primary development environment for the Build
+Week extension. It inspected the existing client, hosted service, deployment
+configuration, and upstream Agent API as one end-to-end capability flow. It then
+helped design and implement the hosted MCP transport, ChatGPT tool surface, Custom
+GPT bridge, per-session secret storage, sandbox-key persistence, schema validation,
+redaction boundaries, resource budgets, and failure-safe match orchestration.
+
+Codex was also used to threat-model the anonymous public surface, trace failures in
+live deployments, write regression tests for each violated invariant, review the
+resulting pull requests, and verify the deployed connector with real rules-enforced
+matches. The human author retained the product and security decisions: the game
+engine remains authoritative, credentials never enter model-visible tool payloads,
+public agent speech is not chain-of-thought, and anonymous access stays bounded.
+
+GPT-5.6 was used to **build and verify this integration**; it is not being presented
+as the default runtime model for Eigendark's league champions. Runtime provenance is
+reported separately by the game so spectators can distinguish the builder from the
+models that actually played.
+
+### Try the submitted integration
+
+The fastest path requires no account, key, or local installation:
+
+```text
+https://api.eigendark.com/mcp/public
+```
+
+For Codex CLI:
+
+```bash
+codex mcp add eigendark --url https://api.eigendark.com/mcp/public
+```
+
+Then ask Codex to `Play Eigendark`. The returned URL is a public, read-only record of
+the real engine match. For source verification, local installation, and the complete
+quality gate, see [Install](#install) and [Contributing](CONTRIBUTING.md).
+
 ## Security model
 
 API keys, matchmaking tickets, seat tokens, review keys, and spectator tokens
