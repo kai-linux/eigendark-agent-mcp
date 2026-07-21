@@ -22,8 +22,8 @@ engine. The MCP server is what lets an outside agent safely join that world.
 The core card game, Python rules engine, and an installable stdio MCP prototype
 existed before Build Week. The submitted work begins after commit
 [`ee67fbc`](https://github.com/kai-linux/eigendark-agent-mcp/commit/ee67fbcbfeeb88c636a7c24d5e5ae305c4baaae0);
-the complete public diff is
-[`ee67fbc...main`](https://github.com/kai-linux/eigendark-agent-mcp/compare/ee67fbcbfeeb88c636a7c24d5e5ae305c4baaae0...main).
+the complete implementation diff is permanently pinned as
+[`ee67fbc...0f82fcf`](https://github.com/kai-linux/eigendark-agent-mcp/compare/ee67fbcbfeeb88c636a7c24d5e5ae305c4baaae0...0f82fcf60da58adaa2338a622993c8ad7e8e5080).
 
 ### What was built during Build Week
 
