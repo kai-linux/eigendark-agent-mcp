@@ -107,3 +107,29 @@ vulnerabilities:
       Perl-serialized input. Debian 13 has no fixed package; reassess on the
       next base-image refresh.
     expired_at: 2026-09-30
+
+  - id: CVE-2026-11822
+    purls:
+      - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+    statement: >-
+      The MCP service does not use SQLite, accepts no database files, and never
+      exposes the affected FTS5 parser to caller-controlled data. Reassess on the
+      next base-image refresh.
+    expired_at: 2026-09-30
+  - id: CVE-2026-11824
+    purls:
+      - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+    statement: >-
+      The MCP service does not use SQLite, accepts no database files, and never
+      exposes the affected FTS5 parser to caller-controlled data. Reassess on the
+      next base-image refresh.
+    expired_at: 2026-09-30
+  - id: CVE-2026-16742
+    purls:
+      - "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-13.5"
+    statement: >-
+      The service never invokes systemd-homed or accepts home records, runs as an
+      unprivileged user, and has no systemd control surface. Reassess on the next
+      base-image refresh.
+    expired_at: 2026-09-30
