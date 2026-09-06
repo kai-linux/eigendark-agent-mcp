@@ -2,30 +2,39 @@ vulnerabilities:
   - id: CVE-2026-53615
     purls:
       - "pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13.5&epoch=1"
+      - "pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13&epoch=1"
       - "pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13.6&epoch=1"
       - "pkg:deb/debian/bsdutils@2.41-5?arch=amd64&distro=debian-13.7&epoch=1"
       - "pkg:deb/debian/libblkid1@2.41-5?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libblkid1@2.41-5?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libblkid1@2.41-5?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libblkid1@2.41-5?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/liblastlog2-2@2.41-5?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/liblastlog2-2@2.41-5?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/liblastlog2-2@2.41-5?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/liblastlog2-2@2.41-5?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libmount1@2.41-5?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libmount1@2.41-5?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libmount1@2.41-5?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libmount1@2.41-5?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libsmartcols1@2.41-5?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsmartcols1@2.41-5?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsmartcols1@2.41-5?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsmartcols1@2.41-5?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libuuid1@2.41-5?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libuuid1@2.41-5?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libuuid1@2.41-5?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libuuid1@2.41-5?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41-5?arch=amd64&distro=debian-13.5&epoch=1"
+      - "pkg:deb/debian/login@4.16.0-2%2Breally2.41-5?arch=amd64&distro=debian-13&epoch=1"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41-5?arch=amd64&distro=debian-13.6&epoch=1"
       - "pkg:deb/debian/login@4.16.0-2+really2.41-5?arch=amd64&distro=debian-13.7&epoch=1"
       - "pkg:deb/debian/mount@2.41-5?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/mount@2.41-5?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/mount@2.41-5?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/mount@2.41-5?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/util-linux@2.41-5?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/util-linux@2.41-5?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/util-linux@2.41-5?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/util-linux@2.41-5?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -36,6 +45,7 @@ vulnerabilities:
   - id: CVE-2026-41992
     purls:
       - "pkg:deb/debian/gzip@1.13-1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/gzip@1.13-1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/gzip@1.13-1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/gzip@1.13-1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -46,15 +56,19 @@ vulnerabilities:
   - id: CVE-2025-69720
     purls:
       - "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libncursesw6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libncursesw6@6.5+20250216-2?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libtinfo6@6.5%2B20250216-2?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libtinfo6@6.5+20250216-2?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=all&distro=debian-13.5"
+      - "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=all&distro=debian-13"
       - "pkg:deb/debian/ncurses-base@6.5%2B20250216-2?arch=all&distro=debian-13.6"
       - "pkg:deb/debian/ncurses-base@6.5+20250216-2?arch=all&distro=debian-13.7"
       - "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/ncurses-bin@6.5%2B20250216-2?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/ncurses-bin@6.5+20250216-2?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -65,6 +79,7 @@ vulnerabilities:
   - id: CVE-2026-54369
     purls:
       - "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libacl1@2.3.2-2%2Bb1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libacl1@2.3.2-2+b1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -75,6 +90,7 @@ vulnerabilities:
   - id: CVE-2026-42496
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -85,6 +101,7 @@ vulnerabilities:
   - id: CVE-2026-42497
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -95,6 +112,7 @@ vulnerabilities:
   - id: CVE-2026-48962
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -105,6 +123,7 @@ vulnerabilities:
   - id: CVE-2026-8376
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -115,6 +134,7 @@ vulnerabilities:
   - id: CVE-2026-9538
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -125,6 +145,7 @@ vulnerabilities:
   - id: CVE-2026-13221
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -135,6 +156,7 @@ vulnerabilities:
   - id: CVE-2026-57432
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -145,6 +167,7 @@ vulnerabilities:
   - id: CVE-2026-57433
     purls:
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/perl-base@5.40.1-6?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -157,6 +180,7 @@ vulnerabilities:
   - id: CVE-2026-11822
     purls:
       - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsqlite3-0@3.46.1-7+deb13u1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -167,6 +191,7 @@ vulnerabilities:
   - id: CVE-2026-11824
     purls:
       - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsqlite3-0@3.46.1-7%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsqlite3-0@3.46.1-7+deb13u1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -177,9 +202,11 @@ vulnerabilities:
   - id: CVE-2026-16742
     purls:
       - "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsystemd0@257.13-1~deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libudev1@257.13-1~deb13u1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -191,30 +218,39 @@ vulnerabilities:
   - id: CVE-2026-76642
     purls:
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -226,30 +262,39 @@ vulnerabilities:
   - id: CVE-2026-78408
     purls:
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -261,30 +306,39 @@ vulnerabilities:
   - id: CVE-2026-78409
     purls:
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
     statement: >-
@@ -296,30 +350,39 @@ vulnerabilities:
   - id: CVE-2026-78410
     purls:
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/bsdutils@2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/bsdutils@2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libblkid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libblkid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/liblastlog2-2@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libmount1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libmount1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libsmartcols1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/libuuid1@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/libuuid1@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.5"
+      - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13"
       - "pkg:deb/debian/login@4.16.0-2%2Breally2.41.5-0%2Bdeb13u1?arch=amd64&epoch=1&distro=debian-13.6"
       - "pkg:deb/debian/login@4.16.0-2+really2.41.5-0+deb13u1?arch=amd64&epoch=1&distro=debian-13.7"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/mount@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/mount@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.5"
+      - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13"
       - "pkg:deb/debian/util-linux@2.41.5-0%2Bdeb13u1?arch=amd64&distro=debian-13.6"
       - "pkg:deb/debian/util-linux@2.41.5-0+deb13u1?arch=amd64&distro=debian-13.7"
     statement: >-
