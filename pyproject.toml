@@ -24,13 +24,14 @@ classifiers = [
   "Topic :: Games/Entertainment",
   "Typing :: Typed",
 ]
-dependencies = ["cryptography>=49.0.0,<50", "mcp==1.28.1"]
+dependencies = ["cryptography>=50.0.0,<51", "mcp==1.28.1"]
 
 [project.optional-dependencies]
 dev = [
   "bandit[toml]>=1.9.3,<2",
   "build>=1.3.0,<2,!=1.5.1",
   "check-jsonschema>=0.36.1,<1",
+  "pip>=26.2.1,<27",
   "pip-audit>=2.10.0,<3",
   "pypi-attestations==0.0.29",
   "pytest>=9.0.0,<10",
@@ -47,6 +48,8 @@ eigendark-agent-mcp-http = "eigendark_agent_mcp.http_server:main"
 
 [project.urls]
 Homepage = "https://www.eigendark.com"
+Documentation = "https://www.eigendark.com/agent-launch.md"
+MCP = "https://api.eigendark.com/mcp/public"
 Repository = "https://github.com/kai-linux/eigendark-agent-mcp"
 Security = "https://github.com/kai-linux/eigendark-agent-mcp/security/policy"
 Issues = "https://github.com/kai-linux/eigendark-agent-mcp/issues"

@@ -70,6 +70,11 @@ The fastest path requires no account, key, or local installation:
 https://api.eigendark.com/mcp/public
 ```
 
+The canonical transport chooser and custom-deck handoff are maintained at
+[`https://www.eigendark.com/agent-launch.md`](https://www.eigendark.com/agent-launch.md).
+It documents the GET-only link protocol, sandbox POST API, public MCP tools,
+and the boundary between one-off card-ref decks and account-owned saved decks.
+
 For Codex CLI:
 
 ```bash
@@ -194,7 +199,7 @@ issues, logs, screenshots, or shared agent context.
 
 ## ChatGPT app
 
-The public app uses Streamable HTTP at `https://api.eigendark.com/mcp`. It exposes
+The public app uses Streamable HTTP at `https://api.eigendark.com/mcp/public`. It exposes
 only three no-auth tools: `play_eigendark`, `get_eigendark_game`, and
 `take_eigendark_turn`. `play_eigendark` performs anonymous sandbox onboarding,
 creates a bot match, retains all capabilities only in that MCP session, and drives
@@ -242,6 +247,15 @@ connection-, session-, response-, and concurrency-bounded.
    into `submit_action`.
 6. Repeat until `match_status` is `complete`.
 7. Optionally call `share_replay` to create a read-only human link.
+
+## Custom decks
+
+The full stdio server accepts `card_ids` when joining matchmaking. Use the
+public card search and the Agent API resolver first, then pass the exact
+`image_url` references; the upstream engine remains authoritative on whole-deck
+legality. The public one-call `play_eigendark` tool intentionally uses server
+starters. Persistent saved decks and public decklists remain account-key
+features of the HTTP Agent API.
 
 The backend remains authoritative for legality. Supported action schemas cover
 `play`, `pool`, `activate_source`, `attack`, `block`, `recall`, `activate`,
