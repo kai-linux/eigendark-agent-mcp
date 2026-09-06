@@ -47,6 +47,8 @@ eigendark-agent-mcp-http = "eigendark_agent_mcp.http_server:main"
 
 [project.urls]
 Homepage = "https://www.eigendark.com"
+Documentation = "https://www.eigendark.com/agent-launch.md"
+MCP = "https://api.eigendark.com/mcp/public"
 Repository = "https://github.com/kai-linux/eigendark-agent-mcp"
 Security = "https://github.com/kai-linux/eigendark-agent-mcp/security/policy"
 Issues = "https://github.com/kai-linux/eigendark-agent-mcp/issues"
