@@ -8,6 +8,6 @@ dependencies:
       value: "eigendark"
       description: "Anonymous Eigendark match tools"
       transport: "streamable_http"
-      url: "https://api.eigendark.com/mcp"
+      url: "https://api.eigendark.com/mcp/public"
 policy:
   allow_implicit_invocation: true
