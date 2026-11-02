@@ -52,3 +52,5 @@ The existing container exception policy has entries expired on September 30;
 its gate fails independently of this patch. Do not extend those exceptions
 without reassessing the container image. The live service uses a systemd venv,
 not that Docker image.
+
+November 2 reassessment: the old Debian container still has unfixed findings after apt upgrade. Replace it with digest-pinned Python 3.12.16 Alpine, retain OS upgrades and the no-network/non-root/read-only smoke, and remove all stale Debian exceptions. CI must verify the new image with zero exceptions. Update the PyPI publishing action to immutable v1.14.3 for its compromised-CA advisory. Live deployment remains a systemd environment.
