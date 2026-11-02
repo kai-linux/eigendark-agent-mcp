@@ -54,3 +54,11 @@ without reassessing the container image. The live service uses a systemd venv,
 not that Docker image.
 
 November 2 reassessment: the old Debian container still has unfixed findings after apt upgrade. Replace it with digest-pinned Python 3.12.16 Alpine, retain OS upgrades and the no-network/non-root/read-only smoke, and remove all stale Debian exceptions. CI must verify the new image with zero exceptions. Update the PyPI publishing action to immutable v1.14.3 for its compromised-CA advisory. Live deployment remains a systemd environment.
+
+November 2 activation: merged security PR #42 (071296ca) is live with Python
+3.12.16 / OpenSSL 3.5.9 / MCP 1.30.0. All hosted checks passed, including
+the Alpine image scan with no exceptions. The installer revealed that its nginx
+template omitted the separately installed Agentverse route and prior forwarding
+hardening. The live route was restored and verified; this follow-up retains
+optional sibling route/rate-limit snippets and overwrites client forwarding
+headers on future installs. Private MCP still rejects clients without mTLS.
