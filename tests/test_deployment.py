@@ -52,3 +52,11 @@ def test_custom_gpt_action_uses_validated_openai_egress_allowlist() -> None:
     ).read_text(encoding="utf-8")
     assert "secrets.token_hex(32)" in installer
     assert "install -m 0600 -o root -g root" in installer
+
+
+def test_shared_host_routes_and_forwarding_survive_mcp_install() -> None:
+    nginx = (ROOT / "deploy/api.eigendark.nginx.conf").read_text(encoding="utf-8")
+    assert "include /etc/nginx/snippets/eigendark-agentverse*.conf;" in nginx
+    assert "include /etc/nginx/snippets/vps-public-limits*.conf;" in nginx
+    assert "$proxy_add_x_forwarded_for" not in nginx
+    assert "proxy_set_header X-Forwarded-For $remote_addr;" in nginx
