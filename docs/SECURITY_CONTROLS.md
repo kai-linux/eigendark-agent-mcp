@@ -34,3 +34,23 @@ the previous pipeline missed it, and the permanent control.
 
 Pull requests must keep the test and control in the same change. Disabling a gate
 requires a documented risk decision, an owner, and an expiry date.
+
+## October 2026 live-service review
+
+The production MCP environment was still Python 3.12.13 with mcp 1.28.1,
+cryptography 49.0.0, PyJWT 2.13.0 and the old certifi trust bundle. This update
+pins mcp 1.30.0, refreshes the affected runtime/development graph, and updates
+the build tooling to setuptools 84.1.0 and pip 26.2.1. Runtime and development
+pip-audit checks pass. The official-client integration suite passes 156 tests
+with 92.58% coverage; wheel and sdist builds, lint and Bandit pass.
+
+The production installer copies Python from the engine runtime; activate the
+engine's Python 3.12.16 update before installing this release. Preparing a
+wheel is not deployment. The user's GitHub credential is currently unavailable
+because the GNOME Login keyring is locked, so merge/deployment remain pending.
+The existing container exception policy has entries expired on September 30;
+its gate fails independently of this patch. Do not extend those exceptions
+without reassessing the container image. The live service uses a systemd venv,
+not that Docker image.
+
+November 2 reassessment: the old Debian container still has unfixed findings after apt upgrade. Replace it with digest-pinned Python 3.12.16 Alpine, retain OS upgrades and the no-network/non-root/read-only smoke, and remove all stale Debian exceptions. CI must verify the new image with zero exceptions. Update the PyPI publishing action to immutable v1.14.3 for its compromised-CA advisory. Live deployment remains a systemd environment.
